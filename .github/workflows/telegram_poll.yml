@@ -2,7 +2,7 @@ name: Telegram bot command poll
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # every 5 min
+    - cron: "* * * * *"  # every 1 min
   workflow_dispatch:
 
 permissions:
