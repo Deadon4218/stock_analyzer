@@ -1,0 +1,58 @@
+name: Personal watchlist analysis
+
+on:
+  schedule:
+    # Market open: 9:35 ET = 13:35 UTC (DST) / 14:35 UTC (standard) — using 13:35 for simplicity
+    - cron: "35 13 * * 1-5"
+    # Market close: 16:05 ET = 20:05 UTC (DST) / 21:05 UTC (standard) — using 20:05
+    - cron: "5 20 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "Run label"
+        default: "Manual"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stock-state
+  cancel-in-progress: false
+
+jobs:
+  personal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Determine label
+        id: label
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -lt "16" ]; then
+              echo "label=Morning" >> $GITHUB_OUTPUT
+            else
+              echo "label=Evening" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "label=${{ inputs.label }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run personal analysis
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          LLM_MODEL: llama-3.3-70b-versatile
+          PERSONAL_RUN_LABEL: ${{ steps.label.outputs.label }}
+          PERSONAL_DELAY_SECONDS: "8"
+        run: python run_personal.py
