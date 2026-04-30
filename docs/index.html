@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stock Analyzer Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0e1117;
+    color: #c9d1d9;
+    margin: 0;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { margin-top: 0; }
+  h2 { margin-top: 30px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: #58a6ff;
+  }
+  .stat-label {
+    font-size: 13px;
+    color: #8b949e;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #21262d;
+  }
+  th { background: #161b22; color: #8b949e; font-weight: 500; font-size: 12px; text-transform: uppercase; }
+  .verdict-entry { color: #3fb950; font-weight: 600; }
+  .verdict-skip { color: #f85149; }
+  .outcome-tp { color: #3fb950; }
+  .outcome-sl { color: #f85149; }
+  .outcome-open { color: #d29922; }
+  .outcome-expired { color: #6e7681; }
+  .chart-wrap { background: #161b22; padding: 16px; border-radius: 8px; border: 1px solid #30363d; height: 320px; }
+  .footer { color: #6e7681; font-size: 12px; margin-top: 40px; text-align: center; }
+  a { color: #58a6ff; }
+</style>
+</head>
+<body>
+
+<h1>📊 Stock Analyzer Dashboard</h1>
+<p style="color:#8b949e">Live results from the analyzer. Auto-updated whenever workflows commit.</p>
+
+<div class="grid" id="kpis"></div>
+
+<h2>Strategy Accuracy</h2>
+<div class="chart-wrap"><canvas id="strategyChart"></canvas></div>
+
+<h2>Per-Agent Accuracy</h2>
+<div class="chart-wrap"><canvas id="agentChart"></canvas></div>
+
+<h2>Recent Analyses</h2>
+<table id="recentTable">
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Ticker</th>
+      <th>Verdict</th>
+      <th>Bull %</th>
+      <th>Entry</th>
+      <th>TP</th>
+      <th>SL</th>
+      <th>Outcome</th>
+      <th>Source</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<p class="footer">Data: <a href="https://github.com/Deadon4218/stock_analyzer/blob/main/data/analyses.jsonl" target="_blank">analyses.jsonl</a> · Built on GitHub Actions · $0/month</p>
+
+<script>
+const REPO = "Deadon4218/stock_analyzer";
+const DATA_URL = `https://raw.githubusercontent.com/${REPO}/main/data/analyses.jsonl`;
+const HIGH_SCORE = 0.6;
+
+async function loadData() {
+  const resp = await fetch(DATA_URL + "?t=" + Date.now());
+  if (!resp.ok) throw new Error("Failed to load data");
+  const text = await resp.text();
+  return text.trim().split("\n").filter(l => l).map(l => JSON.parse(l));
+}
+
+function isResolved(r) {
+  return ["tp_hit", "sl_hit", "expired"].includes(r.outcome);
+}
+
+function computeKpis(records) {
+  const resolved = records.filter(isResolved);
+  const entries = resolved.filter(r => r.verdict === "ENTRY");
+  const wins = entries.filter(r => r.outcome === "tp_hit");
+  return {
+    total: records.length,
+    resolved: resolved.length,
+    open: records.filter(r => !isResolved(r)).length,
+    entries: entries.length,
+    wins: wins.length,
+    winRate: entries.length ? wins.length / entries.length : null,
+  };
+}
+
+function renderKpis(k) {
+  const cards = [
+    { label: "Total Analyses", value: k.total },
+    { label: "Resolved", value: k.resolved },
+    { label: "Pending", value: k.open },
+    { label: "ENTRY signals", value: k.entries },
+    { label: "Wins", value: k.wins },
+    { label: "Win Rate", value: k.winRate === null ? "—" : (k.winRate * 100).toFixed(1) + "%" },
+  ];
+  document.getElementById("kpis").innerHTML = cards.map(c =>
+    `<div class="card"><div class="stat-label">${c.label}</div><div class="stat-value">${c.value}</div></div>`
+  ).join("");
+}
+
+function aggregateBy(records, keyFn) {
+  const buckets = {};
+  for (const r of records.filter(isResolved)) {
+    const bullish = r.outcome === "tp_hit";
+    for (const a of r.agents || []) {
+      if (a.score < HIGH_SCORE) continue;
+      const k = keyFn(a);
+      if (!buckets[k]) buckets[k] = { correct: 0, total: 0 };
+      const correct = (a.stance === "bull" && bullish) || (a.stance === "bear" && !bullish);
+      if (correct) buckets[k].correct++;
+      buckets[k].total++;
+    }
+  }
+  return Object.entries(buckets)
+    .map(([k, v]) => ({ key: k, accuracy: v.correct / v.total, total: v.total }))
+    .sort((a, b) => b.accuracy - a.accuracy);
+}
+
+function renderBarChart(canvasId, rows, title) {
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: rows.map(r => `${r.key} (n=${r.total})`),
+      datasets: [{
+        label: title,
+        data: rows.map(r => +(r.accuracy * 100).toFixed(1)),
+        backgroundColor: rows.map(r => r.accuracy >= 0.6 ? "#3fb950" : r.accuracy >= 0.5 ? "#d29922" : "#f85149"),
+      }],
+    },
+    options: {
+      indexAxis: "y",
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#c9d1d9", callback: v => v + "%" }, grid: { color: "#21262d" }, max: 100 },
+        y: { ticks: { color: "#c9d1d9" }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+function outcomeClass(o) {
+  return { tp_hit: "outcome-tp", sl_hit: "outcome-sl", expired: "outcome-expired" }[o] || "outcome-open";
+}
+
+function outcomeText(o) {
+  return { tp_hit: "🟢 TP hit", sl_hit: "🔴 SL hit", expired: "⚪ expired", still_open: "⏳ open" }[o] || "⏳ open";
+}
+
+function renderRecent(records) {
+  const tbody = document.querySelector("#recentTable tbody");
+  const rows = records.slice(-30).reverse();
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.ts.slice(0, 10)}</td>
+      <td><strong>${r.ticker}</strong></td>
+      <td class="verdict-${r.verdict.toLowerCase()}">${r.verdict}</td>
+      <td>${(r.bull_prob * 100).toFixed(0)}%</td>
+      <td>${r.entry ? "$" + r.entry.toFixed(2) : "—"}</td>
+      <td>${r.take_profit ? "$" + r.take_profit.toFixed(2) : "—"}</td>
+      <td>${r.stop_loss ? "$" + r.stop_loss.toFixed(2) : "—"}</td>
+      <td class="${outcomeClass(r.outcome)}">${outcomeText(r.outcome)}</td>
+      <td>${r.source}</td>
+    </tr>
+  `).join("");
+}
+
+(async () => {
+  try {
+    const records = await loadData();
+    if (!records.length) {
+      document.body.innerHTML += "<p style='color:#8b949e'>No analyses logged yet. Wait for the next workflow run.</p>";
+      return;
+    }
+    renderKpis(computeKpis(records));
+    renderBarChart("strategyChart", aggregateBy(records, a => a.type || "unknown"), "Accuracy %");
+    renderBarChart("agentChart", aggregateBy(records, a => a.name), "Accuracy %");
+    renderRecent(records);
+  } catch (e) {
+    document.body.innerHTML += `<p style='color:#f85149'>Error loading data: ${e.message}</p>`;
+  }
+})();
+</script>
+</body>
+</html>

@@ -15,6 +15,7 @@ from aggregator import aggregate, calculate_price_levels
 from state_store import get_analyzed_keys, add_analyzed_keys
 from user_store import get_all_users
 from telegram_bot import broadcast, format_broadcast_report
+from analyses_log import log_analysis
 
 
 def validate_env():
@@ -88,6 +89,7 @@ def main():
         bull, bear = run_all_agents(signal, data, msg_ctx, chart_context)
         result = aggregate(signal.ticker, bull, bear, price_levels)
         results.append(result)
+        log_analysis(result, source="broadcast")
 
     # 5. Broadcast to all users
     users = get_all_users()

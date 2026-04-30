@@ -56,3 +56,12 @@ jobs:
           PERSONAL_RUN_LABEL: ${{ steps.label.outputs.label }}
           PERSONAL_DELAY_SECONDS: "8"
         run: python run_personal.py
+
+      - name: Commit analyses log
+        run: |
+          git config user.name "stock-analyzer-bot"
+          git config user.email "actions@github.com"
+          git add data/
+          git diff --quiet --staged || git commit -m "chore: log personal analyses [skip ci]"
+          git pull --rebase origin ${{ github.ref_name }} || true
+          git push

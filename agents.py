@@ -16,6 +16,7 @@ MAX_RETRIES = 3
 @dataclass
 class AgentVerdict:
     agent_name: str
+    agent_type: str       # strategy category for stats grouping
     stance: Literal["bull", "bear"]
     score: float          # 0.0–1.0 (how strong the argument is)
     confidence: float     # 0.0–1.0 (how confident the agent is)
@@ -26,6 +27,7 @@ class AgentVerdict:
 BULL_AGENTS = [
     {
         "name": "Momentum Analyst",
+        "type": "technical_momentum",
         "prompt": (
             "You are a bullish momentum analyst. Analyze recent price direction "
             "and check for growing buying pressure. Look at daily/weekly/monthly % changes, "
@@ -34,6 +36,7 @@ BULL_AGENTS = [
     },
     {
         "name": "Volume Bull",
+        "type": "technical_volume",
         "prompt": (
             "You are a bullish volume analyst. Analyze trading volume. "
             "Look for: above-average volume on up days (accumulation), "
@@ -42,6 +45,7 @@ BULL_AGENTS = [
     },
     {
         "name": "Technical Bull",
+        "type": "technical_indicators",
         "prompt": (
             "You are a bullish technical analyst. Check: RSI below 70 (not overbought), "
             "stock above MA50 and MA200, distance from 52-week high, "
@@ -51,6 +55,7 @@ BULL_AGENTS = [
     },
     {
         "name": "Risk/Reward Analyst",
+        "type": "risk_management",
         "prompt": (
             "You are a bullish R:R analyst. Calculate the risk/reward ratio. "
             "The signal is attractive if: R:R >= 2, stop loss is not too far from entry, "
@@ -59,6 +64,7 @@ BULL_AGENTS = [
     },
     {
         "name": "Sentiment Bull",
+        "type": "sentiment",
         "prompt": (
             "You are a bullish sentiment analyst. Analyze recent Discord messages about this stock. "
             "Look for: positive mentions, how many people are talking about it, "
@@ -70,6 +76,7 @@ BULL_AGENTS = [
 BEAR_AGENTS = [
     {
         "name": "Reversal Detector",
+        "type": "technical_pattern",
         "prompt": (
             "You are a bearish reversal analyst. "
             "Look for: lower highs, support breakdown, divergence between price and volume, "
@@ -78,6 +85,7 @@ BEAR_AGENTS = [
     },
     {
         "name": "Overbought Scanner",
+        "type": "technical_oscillator",
         "prompt": (
             "You are a bearish overbought analyst. "
             "Check: RSI above 70, distance from 52-week high, how much it has risen recently, "
@@ -86,6 +94,7 @@ BEAR_AGENTS = [
     },
     {
         "name": "Market Condition Bear",
+        "type": "macro_trend",
         "prompt": (
             "You are a bearish macro analyst. Check: is the stock below MA200 "
             "(primary downtrend), is the sector weak, "
@@ -94,6 +103,7 @@ BEAR_AGENTS = [
     },
     {
         "name": "Stop Loss Proximity",
+        "type": "risk_management",
         "prompt": (
             "You are a bearish risk analyst. Calculate: "
             "how far the SL is from entry in %, whether SL is below clear support, "
@@ -102,6 +112,7 @@ BEAR_AGENTS = [
     },
     {
         "name": "Counter Trend Bear",
+        "type": "macro_trend",
         "prompt": (
             "You are a bearish trend analyst. Check if the suggested entry is against the main trend. "
             "If the stock is in a long-term downtrend — a long entry is risky. "
@@ -223,6 +234,7 @@ def run_agent(
 
             return AgentVerdict(
                 agent_name=agent_config["name"],
+                agent_type=agent_config.get("type", "unknown"),
                 stance=stance,
                 score=_clamp(float(result.get("score", 0.5))),
                 confidence=_clamp(float(result.get("confidence", 0.5))),
@@ -237,6 +249,7 @@ def run_agent(
                 continue
             return AgentVerdict(
                 agent_name=agent_config["name"],
+                agent_type=agent_config.get("type", "unknown"),
                 stance=stance,
                 score=0.5,
                 confidence=0.1,

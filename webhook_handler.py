@@ -18,11 +18,16 @@ API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 WELCOME_TEXT = (
     "👋 <b>Stock Signal Analyzer Bot</b>\n\n"
-    "<b>Commands:</b>\n"
+    "<b>Watchlist:</b>\n"
     "/add AAPL — Add stock to your watchlist\n"
     "/remove AAPL — Remove stock\n"
     "/list — Show your watchlist\n"
     "/analyze AAPL — Instant analysis (~30s)\n\n"
+    "<b>Stats &amp; History:</b>\n"
+    "/stats — Overall win rate of past calls\n"
+    "/agent_stats — Per-agent accuracy\n"
+    "/strategy_stats — Accuracy by strategy type\n"
+    "/history AAPL — Past calls on a ticker\n\n"
     "⏱ <i>Commands are processed from the queue every 1 minute, "
     "so replies may take up to ~60s.</i>\n\n"
     "You'll automatically receive:\n"
@@ -92,11 +97,31 @@ def handle_command(chat_id: int, text: str):
             return
         send_message(chat_id, f"🔄 Analyzing <b>{ticker}</b>... (~30s)")
         from personal_analysis import analyze_ticker
-        result = analyze_ticker(ticker)
+        result = analyze_ticker(ticker, source="manual")
         if result:
             send_message(chat_id, format_personal_report(ticker, result))
         else:
             send_message(chat_id, f"❌ Could not analyze {ticker} (no market data)")
+
+    elif cmd == "/stats":
+        from stats import overall_stats, format_overall
+        send_message(chat_id, format_overall(overall_stats()))
+
+    elif cmd == "/agent_stats":
+        from stats import agent_accuracy, format_agent_table
+        send_message(chat_id, format_agent_table(agent_accuracy()))
+
+    elif cmd == "/strategy_stats":
+        from stats import strategy_accuracy, format_strategy_table
+        send_message(chat_id, format_strategy_table(strategy_accuracy()))
+
+    elif cmd == "/history":
+        if not args:
+            send_message(chat_id, "Usage: <code>/history AAPL</code>")
+            return
+        ticker = args[0].upper().strip()
+        from stats import ticker_history, format_ticker_history
+        send_message(chat_id, format_ticker_history(ticker, ticker_history(ticker)))
 
     else:
         send_message(chat_id, "Unknown command. Send /help for command list.")

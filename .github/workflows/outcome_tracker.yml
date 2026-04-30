@@ -1,0 +1,40 @@
+name: Outcome tracker (daily)
+
+on:
+  schedule:
+    - cron: "30 21 * * 1-5"  # Mon-Fri at 21:30 UTC (~16:30 ET, after market close)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stock-state
+  cancel-in-progress: false
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Update outcomes
+        run: python outcome_tracker.py
+
+      - name: Commit outcome updates
+        run: |
+          git config user.name "stock-analyzer-bot"
+          git config user.email "actions@github.com"
+          git add data/
+          git diff --quiet --staged || git commit -m "chore: update analysis outcomes [skip ci]"
+          git pull --rebase origin ${{ github.ref_name }} || true
+          git push

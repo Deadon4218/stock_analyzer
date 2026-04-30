@@ -8,9 +8,10 @@ from signal_parser import StockSignal
 from stock_data import fetch_stock_data
 from agents import run_all_agents
 from aggregator import aggregate, calculate_price_levels, AnalysisResult
+from analyses_log import log_analysis
 
 
-def analyze_ticker(ticker: str) -> AnalysisResult | None:
+def analyze_ticker(ticker: str, source: str = "personal") -> AnalysisResult | None:
     signal = StockSignal(ticker=ticker, direction="long")
 
     data = fetch_stock_data(ticker)
@@ -24,7 +25,9 @@ def analyze_ticker(ticker: str) -> AnalysisResult | None:
         signal, data, "", "No chart images available."
     )
 
-    return aggregate(ticker, bull_verdicts, bear_verdicts, price_levels)
+    result = aggregate(ticker, bull_verdicts, bear_verdicts, price_levels)
+    log_analysis(result, source=source)
+    return result
 
 
 def analyze_watchlist(tickers: list[str], delay_between: float = 5.0) -> list[AnalysisResult]:
