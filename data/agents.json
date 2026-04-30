@@ -1,0 +1,138 @@
+{
+  "agents": [
+    {
+      "name": "Momentum Analyst",
+      "type": "technical_momentum",
+      "prompt": "You are a bullish momentum analyst. Analyze recent price direction and check for growing buying pressure. Look at daily/weekly/monthly % changes, whether the stock is consistently rising, and if there's a higher lows pattern.",
+      "stance": "bull",
+      "category": {
+        "label": "Technical \u00b7 Momentum",
+        "desc": "Detects buying pressure via daily/weekly/monthly % changes, higher-lows patterns."
+      }
+    },
+    {
+      "name": "Volume Bull",
+      "type": "technical_volume",
+      "prompt": "You are a bullish volume analyst. Analyze trading volume. Look for: above-average volume on up days (accumulation), today's volume vs 10-day average ratio, and signs of institutional buying.",
+      "stance": "bull",
+      "category": {
+        "label": "Technical \u00b7 Volume",
+        "desc": "Validates moves through trading volume \u2014 accumulation, institutional buying."
+      }
+    },
+    {
+      "name": "Technical Bull",
+      "type": "technical_indicators",
+      "prompt": "You are a bullish technical analyst. Check: RSI below 70 (not overbought), stock above MA50 and MA200, distance from 52-week high, and whether the suggested entry is above strong support. Pay special attention to chart analysis data if available.",
+      "stance": "bull",
+      "category": {
+        "label": "Technical \u00b7 Indicators",
+        "desc": "Uses RSI, MA50, MA200, support/resistance distance."
+      }
+    },
+    {
+      "name": "Risk/Reward Analyst",
+      "type": "risk_management",
+      "prompt": "You are a bullish R:R analyst. Calculate the risk/reward ratio. The signal is attractive if: R:R >= 2, stop loss is not too far from entry, and the target is realistic based on ATR volatility.",
+      "stance": "bull",
+      "category": {
+        "label": "Risk Management",
+        "desc": "Evaluates R:R ratio, stop-loss placement vs ATR volatility, target realism."
+      }
+    },
+    {
+      "name": "Sentiment Bull",
+      "type": "sentiment",
+      "prompt": "You are a bullish sentiment analyst. Analyze recent Discord messages about this stock. Look for: positive mentions, how many people are talking about it, whether there's consensus, and if people have entered successfully before.",
+      "stance": "bull",
+      "category": {
+        "label": "Sentiment",
+        "desc": "Reads Discord chatter \u2014 consensus, prior successful entries, mention frequency."
+      }
+    },
+    {
+      "name": "Reversal Detector",
+      "type": "technical_pattern",
+      "prompt": "You are a bearish reversal analyst. Look for: lower highs, support breakdown, divergence between price and volume, and whether the stock is near strong resistance.",
+      "stance": "bear",
+      "category": {
+        "label": "Technical \u00b7 Pattern",
+        "desc": "Looks for reversal patterns: lower highs, breakdowns, divergence."
+      }
+    },
+    {
+      "name": "Overbought Scanner",
+      "type": "technical_oscillator",
+      "prompt": "You are a bearish overbought analyst. Check: RSI above 70, distance from 52-week high, how much it has risen recently, and whether volume declined during the rise (bearish divergence).",
+      "stance": "bear",
+      "category": {
+        "label": "Technical \u00b7 Oscillator",
+        "desc": "RSI overbought/oversold + bearish divergence with volume."
+      }
+    },
+    {
+      "name": "Market Condition Bear",
+      "type": "macro_trend",
+      "prompt": "You are a bearish macro analyst. Check: is the stock below MA200 (primary downtrend), is the sector weak, and is the stock failing to hold support levels.",
+      "stance": "bear",
+      "category": {
+        "label": "Macro \u00b7 Trend",
+        "desc": "Primary trend (above/below MA200), sector strength, support holds/breaks."
+      }
+    },
+    {
+      "name": "Stop Loss Proximity",
+      "type": "risk_management",
+      "prompt": "You are a bearish risk analyst. Calculate: how far the SL is from entry in %, whether SL is below clear support, and whether normal ATR volatility could trigger the stop.",
+      "stance": "bear",
+      "category": {
+        "label": "Risk Management",
+        "desc": "Evaluates R:R ratio, stop-loss placement vs ATR volatility, target realism."
+      }
+    },
+    {
+      "name": "Counter Trend Bear",
+      "type": "macro_trend",
+      "prompt": "You are a bearish trend analyst. Check if the suggested entry is against the main trend. If the stock is in a long-term downtrend \u2014 a long entry is risky. Analyze the 20-day and 5-day trend. Check chart analysis if available.",
+      "stance": "bear",
+      "category": {
+        "label": "Macro \u00b7 Trend",
+        "desc": "Primary trend (above/below MA200), sector strength, support holds/breaks."
+      }
+    }
+  ],
+  "strategies": {
+    "technical_momentum": {
+      "label": "Technical \u00b7 Momentum",
+      "desc": "Detects buying pressure via daily/weekly/monthly % changes, higher-lows patterns."
+    },
+    "technical_volume": {
+      "label": "Technical \u00b7 Volume",
+      "desc": "Validates moves through trading volume \u2014 accumulation, institutional buying."
+    },
+    "technical_indicators": {
+      "label": "Technical \u00b7 Indicators",
+      "desc": "Uses RSI, MA50, MA200, support/resistance distance."
+    },
+    "technical_pattern": {
+      "label": "Technical \u00b7 Pattern",
+      "desc": "Looks for reversal patterns: lower highs, breakdowns, divergence."
+    },
+    "technical_oscillator": {
+      "label": "Technical \u00b7 Oscillator",
+      "desc": "RSI overbought/oversold + bearish divergence with volume."
+    },
+    "sentiment": {
+      "label": "Sentiment",
+      "desc": "Reads Discord chatter \u2014 consensus, prior successful entries, mention frequency."
+    },
+    "risk_management": {
+      "label": "Risk Management",
+      "desc": "Evaluates R:R ratio, stop-loss placement vs ATR volatility, target realism."
+    },
+    "macro_trend": {
+      "label": "Macro \u00b7 Trend",
+      "desc": "Primary trend (above/below MA200), sector strength, support holds/breaks."
+    }
+  }
+}
