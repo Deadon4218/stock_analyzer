@@ -6,12 +6,18 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 
+def _check_token():
+    if not BOT_TOKEN:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
+
+
 def _esc(text: str) -> str:
     """Escape user-supplied text for Telegram HTML parse mode."""
     return html.escape(str(text), quote=False)
 
 
 def send_message(chat_id: int, text: str, parse_mode: str = "HTML"):
+    _check_token()
     for chunk in _split_message(text):
         try:
             resp = requests.post(

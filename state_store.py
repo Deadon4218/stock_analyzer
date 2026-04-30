@@ -45,3 +45,16 @@ def set_last_update_id(update_id: int):
     state = _load()
     state["last_telegram_update_id"] = update_id
     _save(state)
+
+
+def get_cooldown_ts(chat_id: int, key: str) -> float:
+    """Return last-action unix ts for (chat_id, key) or 0."""
+    cd = _load().get("cooldowns", {})
+    return float(cd.get(f"{chat_id}:{key}", 0))
+
+
+def set_cooldown_ts(chat_id: int, key: str, ts: float):
+    state = _load()
+    cd = state.setdefault("cooldowns", {})
+    cd[f"{chat_id}:{key}"] = ts
+    _save(state)

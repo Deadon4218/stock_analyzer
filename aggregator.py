@@ -113,8 +113,10 @@ class AnalysisResult:
     price_levels: Optional[PriceLevels] = None
 
     def probability_ratio(self) -> float:
+        # Returns a JSON-safe value. When bear=0 (extremely rare),
+        # we cap at 99.0 instead of inf so reports/serialization work.
         if self.bear_probability == 0:
-            return float("inf")
+            return 99.0
         return round(self.bull_probability / self.bear_probability, 3)
 
     def formatted_report(self) -> str:

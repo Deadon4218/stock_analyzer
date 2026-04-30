@@ -6,9 +6,13 @@ import os
 import requests
 from dotenv import load_dotenv
 
+import time
+
 from user_store import add_ticker, remove_ticker, get_watchlist
-from state_store import get_last_update_id, set_last_update_id
+from state_store import get_last_update_id, set_last_update_id, get_cooldown_ts, set_cooldown_ts
 from telegram_bot import send_message, format_personal_report
+
+ANALYZE_COOLDOWN_SEC = 60
 
 load_dotenv()
 
@@ -95,6 +99,15 @@ def handle_command(chat_id: int, text: str):
         if not ticker.isalpha() or len(ticker) > 5:
             send_message(chat_id, f"⚠️ Invalid ticker: {ticker}")
             return
+
+        now = time.time()
+        last = get_cooldown_ts(chat_id, "analyze")
+        remaining = ANALYZE_COOLDOWN_SEC - (now - last)
+        if remaining > 0:
+            send_message(chat_id, f"⏳ Please wait {int(remaining)}s before another /analyze")
+            return
+        set_cooldown_ts(chat_id, "analyze", now)
+
         send_message(chat_id, f"🔄 Analyzing <b>{ticker}</b>... (~30s)")
         from personal_analysis import analyze_ticker
         result = analyze_ticker(ticker, source="manual")

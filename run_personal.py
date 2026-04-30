@@ -1,6 +1,8 @@
 """
 Personal watchlist analysis for all users.
 Triggered by GitHub Actions 2x daily (market open + close).
+
+Optimization: shared tickers across users are analyzed only once per run.
 """
 import os
 import time
@@ -33,31 +35,47 @@ def main():
         print("No users registered")
         return
 
+    # Collect all unique tickers across users so we analyze each only once.
+    all_tickers = sorted({
+        t.upper().strip()
+        for u in users
+        for t in u.get("watchlist", [])
+        if t and t.strip()
+    })
+
+    if not all_tickers:
+        print("No tickers in any watchlist")
+        return
+
+    print(f"🧮 Analyzing {len(all_tickers)} unique ticker(s) shared across {len(users)} user(s)")
+
+    cache: dict[str, object] = {}
+    for i, ticker in enumerate(all_tickers):
+        print(f"  [{i+1}/{len(all_tickers)}] {ticker}")
+        try:
+            cache[ticker] = analyze_ticker(ticker)
+        except Exception as e:
+            print(f"    ⚠️  {ticker} failed: {e}")
+            cache[ticker] = None
+
+        if i < len(all_tickers) - 1:
+            time.sleep(delay)
+
+    # Send each user a summary built from the cache.
     for user in users:
         chat_id = user.get("chat_id")
         watchlist = user.get("watchlist", [])
         if not chat_id or not watchlist:
             continue
 
-        print(f"\n👤 User {chat_id} — {len(watchlist)} ticker(s)")
-        send_message(chat_id, f"⏳ Running <b>{label}</b> analysis on your watchlist...")
-
-        per_ticker = []
-        for i, ticker in enumerate(watchlist):
-            print(f"  [{i+1}/{len(watchlist)}] {ticker}")
-            try:
-                result = analyze_ticker(ticker)
-            except Exception as e:
-                print(f"    ⚠️  {ticker} failed: {e}")
-                result = None
-            per_ticker.append((ticker, result))
-
-            if i < len(watchlist) - 1:
-                time.sleep(delay)
-
+        per_ticker = [(t.upper().strip(), cache.get(t.upper().strip())) for t in watchlist]
         report = format_personal_summary(per_ticker)
-        send_message(chat_id, report)
-        print(f"  ✅ Sent to {chat_id}")
+        try:
+            send_message(chat_id, f"📈 <b>{label} watchlist analysis</b>")
+            send_message(chat_id, report)
+            print(f"  ✅ Sent to {chat_id}")
+        except Exception as e:
+            print(f"  ⚠️  Failed to send to {chat_id}: {e}")
 
 
 if __name__ == "__main__":
