@@ -11,7 +11,12 @@ from dotenv import load_dotenv
 
 from user_store import get_all_users
 from personal_analysis import analyze_ticker
+from state_store import get_last_run_ts, set_last_run_ts
 from telegram_bot import send_message, format_personal_summary
+
+# Skip the run if a same-labeled run completed within this many seconds.
+# Lets us schedule a backup cron without double-sending reports.
+DEDUP_WINDOW_SEC = int(os.environ.get("PERSONAL_DEDUP_WINDOW_SEC", 1800))
 
 
 def validate_env():
@@ -29,6 +34,14 @@ def main():
     delay = float(os.environ.get("PERSONAL_DELAY_SECONDS", 8))
 
     print(f"📊 Personal cycle ({label}) — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+
+    # Dedup: if a primary run already completed recently, skip the backup.
+    now = time.time()
+    last = get_last_run_ts(label)
+    if last and (now - last) < DEDUP_WINDOW_SEC:
+        elapsed = int(now - last)
+        print(f"⏭  Skipping — a '{label}' run completed {elapsed}s ago ({DEDUP_WINDOW_SEC}s window)")
+        return
 
     users = get_all_users()
     if not users:
@@ -76,6 +89,9 @@ def main():
             print(f"  ✅ Sent to {chat_id}")
         except Exception as e:
             print(f"  ⚠️  Failed to send to {chat_id}: {e}")
+
+    set_last_run_ts(label, now)
+    print(f"💾 Marked '{label}' run complete at {datetime.utcfromtimestamp(now).strftime('%H:%M UTC')}")
 
 
 if __name__ == "__main__":

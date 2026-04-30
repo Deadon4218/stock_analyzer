@@ -58,3 +58,16 @@ def set_cooldown_ts(chat_id: int, key: str, ts: float):
     cd = state.setdefault("cooldowns", {})
     cd[f"{chat_id}:{key}"] = ts
     _save(state)
+
+
+def get_last_run_ts(label: str) -> float:
+    """Last successful run timestamp for a labeled job (Morning/Evening)."""
+    runs = _load().get("last_runs", {})
+    return float(runs.get(label, 0))
+
+
+def set_last_run_ts(label: str, ts: float):
+    state = _load()
+    runs = state.setdefault("last_runs", {})
+    runs[label] = ts
+    _save(state)

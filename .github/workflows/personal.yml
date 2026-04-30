@@ -2,10 +2,12 @@ name: Personal watchlist analysis
 
 on:
   schedule:
-    # Market open: 9:35 ET = 13:35 UTC (DST) / 14:35 UTC (standard) — using 13:35 for simplicity
+    # Morning (market open ~13:35 UTC). Two attempts in case GitHub throttles cron.
     - cron: "35 13 * * 1-5"
-    # Market close: 16:05 ET = 20:05 UTC (DST) / 21:05 UTC (standard) — using 20:05
+    - cron: "50 13 * * 1-5"
+    # Evening (market close ~20:05 UTC). Two attempts.
     - cron: "5 20 * * 1-5"
+    - cron: "20 20 * * 1-5"
   workflow_dispatch:
     inputs:
       label:
