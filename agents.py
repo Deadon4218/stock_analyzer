@@ -11,11 +11,16 @@ from signal_parser import StockSignal
 from stock_data import StockData
 
 MAX_RETRIES = 4
-# Delay between sequential agent calls — stays under Groq's 12k TPM free tier.
-# Each call ≈ 1500-2000 tokens; spacing them out lets the rolling window clear.
-AGENT_DELAY_SEC = float(os.environ.get("AGENT_DELAY_SEC", 7))
+# Agent calls use a smaller, faster model (30k TPM free vs 12k for 70b).
+# Specialist agents do simple scoring — 8b is sufficient and dramatically
+# reduces rate limiting. Override via AGENT_MODEL env var if needed.
+AGENT_MODEL = os.environ.get("AGENT_MODEL", "llama-3.1-8b-instant")
+# Delay between sequential agent calls. With 8b's 30k TPM cap, 4s is safe.
+AGENT_DELAY_SEC = float(os.environ.get("AGENT_DELAY_SEC", 4))
 # Cap exponential backoff on 429s
 MAX_BACKOFF_SEC = 90
+# Output cap for agent responses (just need score/confidence/reasoning JSON).
+AGENT_MAX_TOKENS = 500
 
 
 @dataclass
@@ -182,7 +187,7 @@ Chart analysis (from TradingView screenshots):
 {chart_context}
 
 Recent Discord messages about this stock:
-{messages_context[:1500] if messages_context else 'No additional messages'}
+{messages_context[:800] if messages_context else 'No additional messages'}
 """
 
 
@@ -229,13 +234,13 @@ def run_agent(
         try:
             client = get_groq()
             response = client.chat.completions.create(
-                model=os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile"),
+                model=AGENT_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.3,
-                max_tokens=1000,
+                max_tokens=AGENT_MAX_TOKENS,
                 timeout=30,
             )
             raw = response.choices[0].message.content.strip()
