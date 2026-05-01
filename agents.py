@@ -1,8 +1,8 @@
 import json
 import os
+import random
 import time
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Literal
 
@@ -10,7 +10,12 @@ from groq_client import get_groq
 from signal_parser import StockSignal
 from stock_data import StockData
 
-MAX_RETRIES = 3
+MAX_RETRIES = 4
+# Delay between sequential agent calls — stays under Groq's 12k TPM free tier.
+# Each call ≈ 1500-2000 tokens; spacing them out lets the rolling window clear.
+AGENT_DELAY_SEC = float(os.environ.get("AGENT_DELAY_SEC", 7))
+# Cap exponential backoff on 429s
+MAX_BACKOFF_SEC = 90
 
 
 @dataclass
@@ -199,6 +204,16 @@ def _repair_agent_json(raw: str) -> dict:
     raise json.JSONDecodeError("Cannot repair", raw, 0)
 
 
+def _backoff_wait(attempt: int, err_str: str) -> float:
+    """Compute wait time on retry: prefer Groq's hint, otherwise exponential + jitter."""
+    m = re.search(r"try again in (\d+\.?\d*)", err_str)
+    if m:
+        return min(float(m.group(1)) + 1, MAX_BACKOFF_SEC)
+    # Exponential: 4, 8, 16, 32... with ±20% jitter
+    base = min(2 ** (attempt + 2), MAX_BACKOFF_SEC)
+    return base * random.uniform(0.8, 1.2)
+
+
 def run_agent(
     agent_config: dict,
     stance: Literal["bull", "bear"],
@@ -244,8 +259,9 @@ def run_agent(
         except Exception as e:
             err_str = str(e)
             if "429" in err_str and attempt < MAX_RETRIES - 1:
-                wait = float(re.search(r"try again in (\d+\.?\d*)", err_str).group(1)) if re.search(r"try again in (\d+\.?\d*)", err_str) else 6
-                time.sleep(wait + 1)
+                wait = _backoff_wait(attempt, err_str)
+                print(f"      ⏳ {agent_config['name']} rate-limited, sleeping {wait:.1f}s")
+                time.sleep(wait)
                 continue
             return AgentVerdict(
                 agent_name=agent_config["name"],
@@ -265,37 +281,32 @@ def run_all_agents(
     chart_context: str,
 ) -> tuple[list[AgentVerdict], list[AgentVerdict]]:
     """
-    Run all 10 agents in parallel with ThreadPoolExecutor.
-    ~6-8 seconds instead of ~30 sequential.
+    Run all 10 agents SEQUENTIALLY with delay between calls.
+    This stays under Groq's free-tier 12k TPM cap by spreading ~17k tokens
+    across 70+ seconds rather than burning them in 10 seconds.
+    Total runtime ≈ 80–120 seconds per stock.
     """
-    print(f"\n🤖 Running 10 agents in parallel for {signal.ticker}...")
+    print(f"\n🤖 Running 10 agents sequentially for {signal.ticker} (delay {AGENT_DELAY_SEC:.0f}s)...")
 
-    tasks = []
-    for agent in BULL_AGENTS:
-        tasks.append(("bull", agent))
-    for agent in BEAR_AGENTS:
-        tasks.append(("bear", agent))
+    tasks = [("bull", a) for a in BULL_AGENTS] + [("bear", a) for a in BEAR_AGENTS]
 
     bull_verdicts = []
     bear_verdicts = []
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        future_to_agent = {
-            executor.submit(
-                run_agent, agent, stance, signal, data, messages_context, chart_context
-            ): (stance, agent)
-            for stance, agent in tasks
-        }
+    for i, (stance, agent) in enumerate(tasks):
+        verdict = run_agent(agent, stance, signal, data, messages_context, chart_context)
+        emoji = "🟢" if stance == "bull" else "🔴"
+        failed = verdict.confidence <= 0.1 and verdict.reasoning.startswith("Analysis error")
+        marker = "❌" if failed else "✅"
+        print(f"   {emoji} {marker} {verdict.agent_name}: score={verdict.score:.2f}")
 
-        for future in as_completed(future_to_agent):
-            stance, agent = future_to_agent[future]
-            verdict = future.result()
-            emoji = "🟢" if stance == "bull" else "🔴"
-            print(f"   {emoji} {verdict.agent_name}: score={verdict.score:.2f}")
+        if stance == "bull":
+            bull_verdicts.append(verdict)
+        else:
+            bear_verdicts.append(verdict)
 
-            if stance == "bull":
-                bull_verdicts.append(verdict)
-            else:
-                bear_verdicts.append(verdict)
+        # Spread out calls to stay under TPM limit, but skip delay after the last one
+        if i < len(tasks) - 1:
+            time.sleep(AGENT_DELAY_SEC)
 
     return bull_verdicts, bear_verdicts

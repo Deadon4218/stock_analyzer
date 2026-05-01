@@ -111,6 +111,18 @@ class AnalysisResult:
     top_bull_reason: str
     top_bear_reason: str
     price_levels: Optional[PriceLevels] = None
+    failed_count: int = 0
+    total_count: int = 10
+
+    def reliability(self) -> float:
+        """Fraction of agents that produced real verdicts (0.0–1.0)."""
+        if self.total_count == 0:
+            return 0.0
+        return round(1 - self.failed_count / self.total_count, 2)
+
+    def is_unreliable(self) -> bool:
+        """True when fewer than half the agents succeeded — verdict shouldn't be trusted."""
+        return self.reliability() < 0.5
 
     def probability_ratio(self) -> float:
         # Returns a JSON-safe value. When bear=0 (extremely rare),
@@ -169,20 +181,31 @@ class AnalysisResult:
         return "\n".join(lines)
 
 
+def _is_failed(v: AgentVerdict) -> bool:
+    """An agent verdict is 'failed' if it crashed and returned the neutral fallback."""
+    return v.confidence <= 0.1 and v.reasoning.startswith("Analysis error")
+
+
 def aggregate(
     ticker: str,
     bull_verdicts: list[AgentVerdict],
     bear_verdicts: list[AgentVerdict],
     price_levels: Optional[PriceLevels] = None,
 ) -> AnalysisResult:
+    # Exclude failed agents from probability math so 50/50 fallbacks don't dilute real votes.
+    real_bulls = [v for v in bull_verdicts if not _is_failed(v)]
+    real_bears = [v for v in bear_verdicts if not _is_failed(v)]
+    failed_count = (len(bull_verdicts) - len(real_bulls)) + (len(bear_verdicts) - len(real_bears))
+    total_count = len(bull_verdicts) + len(bear_verdicts)
+
     def weighted_avg(verdicts: list[AgentVerdict]) -> float:
         total_weight = sum(v.confidence for v in verdicts)
         if total_weight == 0:
             return 0.5
         return sum(v.score * v.confidence for v in verdicts) / total_weight
 
-    bull_raw = weighted_avg(bull_verdicts)
-    bear_raw = weighted_avg(bear_verdicts)
+    bull_raw = weighted_avg(real_bulls) if real_bulls else 0.5
+    bear_raw = weighted_avg(real_bears) if real_bears else 0.5
 
     total = bull_raw + bear_raw
     if total == 0:
@@ -191,10 +214,13 @@ def aggregate(
         bull_prob = round(bull_raw / total, 4)
         bear_prob = round(bear_raw / total, 4)
 
-    should_enter = bull_prob >= THRESHOLD
+    # If too many agents failed, don't recommend ENTRY no matter what the math says.
+    reliability = 1 - failed_count / total_count if total_count else 0
+    should_enter = bull_prob >= THRESHOLD and reliability >= 0.5
 
-    top_bull = max(bull_verdicts, key=lambda v: v.score * v.confidence)
-    top_bear = max(bear_verdicts, key=lambda v: v.score * v.confidence)
+    # Pick top reasons from real verdicts only (fall back to fallbacks if none real)
+    top_bull = max(real_bulls or bull_verdicts, key=lambda v: v.score * v.confidence)
+    top_bear = max(real_bears or bear_verdicts, key=lambda v: v.score * v.confidence)
 
     return AnalysisResult(
         ticker=ticker,
@@ -206,4 +232,6 @@ def aggregate(
         top_bull_reason=top_bull.reasoning,
         top_bear_reason=top_bear.reasoning,
         price_levels=price_levels,
+        failed_count=failed_count,
+        total_count=total_count,
     )

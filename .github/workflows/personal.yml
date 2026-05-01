@@ -24,7 +24,7 @@ concurrency:
 jobs:
   personal:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -56,7 +56,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           LLM_MODEL: llama-3.3-70b-versatile
           PERSONAL_RUN_LABEL: ${{ steps.label.outputs.label }}
-          PERSONAL_DELAY_SECONDS: "8"
+          PERSONAL_DELAY_SECONDS: "3"
         run: python run_personal.py
 
       - name: Commit analyses log

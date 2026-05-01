@@ -58,6 +58,15 @@ def _split_message(text: str, max_len: int = 4000) -> list[str]:
     return chunks
 
 
+def _reliability_warning(r) -> str:
+    """Returns a warning string when many agents failed, else empty."""
+    if not hasattr(r, "failed_count") or r.failed_count == 0:
+        return ""
+    if r.is_unreliable():
+        return f"\n   ⚠️ <b>UNRELIABLE</b> — {r.failed_count}/{r.total_count} agents failed (rate-limit). Don't trust this verdict."
+    return f"\n   ℹ️ <i>{r.failed_count}/{r.total_count} agents failed; verdict based on the rest.</i>"
+
+
 def format_broadcast_report(results) -> str:
     """Render one Telegram message summarizing all signals from a Discord cycle."""
     if not results:
@@ -85,6 +94,7 @@ def format_broadcast_report(results) -> str:
         if r.should_enter:
             line += f"\n   📌 <i>{_esc(r.top_bull_reason[:200])}</i>"
 
+        line += _reliability_warning(r)
         lines.append(line)
 
     return "\n\n".join(lines)
@@ -102,6 +112,10 @@ def format_personal_report(ticker: str, result) -> str:
         lines.append(f"Entry: ${pl.entry:.2f} → TP: ${pl.take_profit:.2f} / SL: ${pl.stop_loss:.2f}")
         if pl.rr_ratio:
             lines.append(f"R:R: {pl.rr_ratio:.1f}")
+
+    warning = _reliability_warning(result)
+    if warning:
+        lines.append(warning.lstrip("\n   "))
 
     if result.should_enter:
         lines.append(f"\n💡 <i>{_esc(result.top_bull_reason[:250])}</i>")
@@ -133,6 +147,7 @@ def format_personal_summary(user_results: list[tuple[str, object]]) -> str:
 
         reason = result.top_bull_reason if result.should_enter else result.top_bear_reason
         line += f"\n   <i>{_esc(reason[:180])}</i>"
+        line += _reliability_warning(result)
         lines.append(line)
 
     return "\n\n".join(lines)
