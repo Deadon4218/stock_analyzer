@@ -110,7 +110,7 @@ def extract_signals_from_messages(messages: list[dict]) -> list[StockSignal]:
         try:
             client = get_groq()
             response = client.chat.completions.create(
-                model=os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile"),
+                model=os.environ.get("LLM_MODEL", "llama-3.1-8b-instant"),
                 messages=[
                     {"role": "system", "content": EXTRACTION_PROMPT},
                     {"role": "user", "content": f"Extract signals from these messages:\n\n{combined}"},

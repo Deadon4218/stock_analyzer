@@ -31,7 +31,7 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          LLM_MODEL: llama-3.3-70b-versatile
+          LLM_MODEL: llama-3.1-8b-instant
         run: python webhook_handler.py
 
       - name: Commit user/state changes
