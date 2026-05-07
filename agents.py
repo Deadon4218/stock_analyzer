@@ -11,11 +11,14 @@ from signal_parser import StockSignal
 from stock_data import StockData
 
 MAX_RETRIES = 4
-# Agent calls use a smaller, faster model (30k TPM free vs 12k for 70b).
-# Specialist agents do simple scoring — 8b is sufficient and dramatically
-# reduces rate limiting. Override via AGENT_MODEL env var if needed.
+# 8b is weaker than 70b at producing decisive probabilities, but its daily
+# token cap (≈500k+ TPD) is the only one that fits a 15-minute cron schedule.
+# 70b's 100k TPD burns out in ~1-2 hours of production traffic. The new p_up
+# contract in SYSTEM_BASE does most of the architectural work — even with 8b's
+# tendency to hedge, the math no longer collapses to 50/50 the way it used to.
 AGENT_MODEL = os.environ.get("AGENT_MODEL", "llama-3.1-8b-instant")
-# Delay between sequential agent calls. With 8b's 30k TPM cap, 4s is safe.
+# 8b free tier: 30k TPM. 6 agents × ~2k tokens ≈ 12k, well under the cap with
+# 4s spacing. Total cycle time per stock ≈ 30-40s.
 AGENT_DELAY_SEC = float(os.environ.get("AGENT_DELAY_SEC", 4))
 # Cap exponential backoff on 429s
 MAX_BACKOFF_SEC = 90
@@ -27,122 +30,138 @@ AGENT_MAX_TOKENS = 500
 class AgentVerdict:
     agent_name: str
     agent_type: str       # strategy category for stats grouping
-    stance: Literal["bull", "bear"]
-    score: float          # 0.0–1.0 (how strong the argument is)
-    confidence: float     # 0.0–1.0 (how confident the agent is)
+    stance: Literal["bull", "bear"]   # which evidence lens the agent specialized in
+    p_up: float           # 0.0–1.0 — agent's overall probability the stock goes up
+    confidence: float     # 0.0–1.0 — agent's confidence in its own p_up
     reasoning: str
     key_points: list[str]
 
+    @property
+    def score(self) -> float:
+        # Backward-compat alias for code that still reads `.score`
+        # (analyses_log.py, sort keys in formatted_report, etc.)
+        return self.p_up
 
+
+# Each agent is a SPECIALIST at a specific evidence lens but its final
+# verdict is a directional probability (p_up) for the trade as a whole.
+# 6 agents (3 bullish-leaning specialists + 3 bearish-leaning specialists)
+# instead of 10 — fits the 70b 12k-TPM budget with reasonable spacing.
 BULL_AGENTS = [
     {
-        "name": "Momentum Analyst",
+        "name": "Momentum & Trend",
         "type": "technical_momentum",
         "prompt": (
-            "You are a bullish momentum analyst. Analyze recent price direction "
-            "and check for growing buying pressure. Look at daily/weekly/monthly % changes, "
-            "whether the stock is consistently rising, and if there's a higher lows pattern."
+            "Your specialty: momentum and trend continuation. "
+            "Examine daily/weekly/monthly % changes, MA50/MA200 alignment, "
+            "higher-lows pattern, and whether the trend supports a long entry. "
+            "Pay attention to chart trend analysis if available."
         ),
     },
     {
-        "name": "Volume Bull",
-        "type": "technical_volume",
-        "prompt": (
-            "You are a bullish volume analyst. Analyze trading volume. "
-            "Look for: above-average volume on up days (accumulation), "
-            "today's volume vs 10-day average ratio, and signs of institutional buying."
-        ),
-    },
-    {
-        "name": "Technical Bull",
+        "name": "Structure & Levels",
         "type": "technical_indicators",
         "prompt": (
-            "You are a bullish technical analyst. Check: RSI below 70 (not overbought), "
-            "stock above MA50 and MA200, distance from 52-week high, "
-            "and whether the suggested entry is above strong support. "
-            "Pay special attention to chart analysis data if available."
+            "Your specialty: technical structure and key levels. "
+            "Examine RSI (overbought/oversold), distance from 52-week high, "
+            "support/resistance from chart analysis, and whether the entry "
+            "sits above strong support."
         ),
     },
     {
-        "name": "Risk/Reward Analyst",
-        "type": "risk_management",
+        "name": "Volume & Flow",
+        "type": "technical_volume",
         "prompt": (
-            "You are a bullish R:R analyst. Calculate the risk/reward ratio. "
-            "The signal is attractive if: R:R >= 2, stop loss is not too far from entry, "
-            "and the target is realistic based on ATR volatility."
-        ),
-    },
-    {
-        "name": "Sentiment Bull",
-        "type": "sentiment",
-        "prompt": (
-            "You are a bullish sentiment analyst. Analyze recent Discord messages about this stock. "
-            "Look for: positive mentions, how many people are talking about it, "
-            "whether there's consensus, and if people have entered successfully before."
+            "Your specialty: volume confirmation and order flow. "
+            "Examine today's volume vs 10-day average, accumulation patterns, "
+            "and whether volume confirms the recent price move (or diverges from it)."
         ),
     },
 ]
 
 BEAR_AGENTS = [
     {
-        "name": "Reversal Detector",
+        "name": "Reversal & Overbought",
         "type": "technical_pattern",
         "prompt": (
-            "You are a bearish reversal analyst. "
-            "Look for: lower highs, support breakdown, divergence between price and volume, "
-            "and whether the stock is near strong resistance."
+            "Your specialty: reversal patterns and overbought conditions. "
+            "Examine RSI > 70, distance already run from 52-week high, "
+            "lower-highs forming, and any volume/price divergence signaling exhaustion."
         ),
     },
     {
-        "name": "Overbought Scanner",
-        "type": "technical_oscillator",
-        "prompt": (
-            "You are a bearish overbought analyst. "
-            "Check: RSI above 70, distance from 52-week high, how much it has risen recently, "
-            "and whether volume declined during the rise (bearish divergence)."
-        ),
-    },
-    {
-        "name": "Market Condition Bear",
+        "name": "Macro & Sector",
         "type": "macro_trend",
         "prompt": (
-            "You are a bearish macro analyst. Check: is the stock below MA200 "
-            "(primary downtrend), is the sector weak, "
-            "and is the stock failing to hold support levels."
+            "Your specialty: macro/sector headwinds and primary trend. "
+            "Examine whether the stock is below MA200 (primary downtrend), "
+            "sector weakness, and whether the entry is against the long-term trend."
         ),
     },
     {
-        "name": "Stop Loss Proximity",
+        "name": "Risk & Stop Distance",
         "type": "risk_management",
         "prompt": (
-            "You are a bearish risk analyst. Calculate: "
-            "how far the SL is from entry in %, whether SL is below clear support, "
-            "and whether normal ATR volatility could trigger the stop."
-        ),
-    },
-    {
-        "name": "Counter Trend Bear",
-        "type": "macro_trend",
-        "prompt": (
-            "You are a bearish trend analyst. Check if the suggested entry is against the main trend. "
-            "If the stock is in a long-term downtrend — a long entry is risky. "
-            "Analyze the 20-day and 5-day trend. Check chart analysis if available."
+            "Your specialty: risk/reward realism and stop-loss survival. "
+            "Examine the R:R ratio, whether the SL is too tight relative to ATR "
+            "(likely to be triggered by normal volatility), and whether the target is "
+            "realistic vs current price action."
         ),
     },
 ]
 
-SYSTEM_BASE = """You are a professional stock analysis agent. Receive the stock data and signal, 
-then return ONLY valid JSON in this exact format:
+SYSTEM_BASE = """You are a professional stock analysis agent. You will be given a stock signal,
+market data, chart analysis, and recent Discord context. Return ONLY valid JSON in this exact format:
 
 {
-  "score": <number between 0.0 and 1.0>,
+  "p_up": <number between 0.0 and 1.0>,
   "confidence": <number between 0.0 and 1.0>,
   "reasoning": "<brief explanation in English, 2-3 sentences>",
   "key_points": ["<point 1>", "<point 2>", "<point 3>"]
 }
 
-score = how strong your argument is (1.0 = very strong, 0.0 = very weak)
-confidence = how confident you are in your analysis (based on available data)
+DEFINITIONS:
+  p_up = your probability that this stock will move UP and the long trade will succeed
+         (reach take-profit before stop-loss) over a typical short-term horizon (1-3 weeks).
+  confidence = how confident you are in your p_up given the available data.
+
+CRITICAL RULES:
+  1. Your specialty is just a LENS — it tells you WHERE to look, not WHAT to conclude.
+     A "bearish reversal specialist" who looks at a clearly bullish chart MUST report
+     p_up > 0.5 because that is the honest answer. Reporting p_up < 0.5 on a bullish
+     chart just because you are a "bear specialist" is WRONG and will be rejected.
+  2. p_up is a DIRECTIONAL probability of the trade succeeding — NOT how strong your
+     personal argument is. If the evidence is bearish, return p_up close to 0.0 even
+     if you specialize in bullish analysis. If bullish, p_up close to 1.0.
+  3. USE THE FULL RANGE. Strong setups deserve 0.75–0.95. Weak setups deserve 0.05–0.25.
+     Do NOT default to 0.5 unless the evidence is genuinely balanced.
+
+EXAMPLES (study these carefully):
+
+Example A — A "Reversal & Overbought" bear-specialist sees a strongly bullish chart
+(above all MAs, RSI 60, near 52w high in confirmed uptrend, no lower-highs):
+  CORRECT: p_up = 0.82. The honest read is bullish even from a bear lens.
+  WRONG: p_up = 0.25 just because the role label says "bearish."
+
+Example B — A "Momentum & Trend" bull-specialist sees a strongly bearish chart
+(below MA200, RSI 28, multi-month downtrend, breaking support):
+  CORRECT: p_up = 0.14. The honest read is bearish even from a bull lens.
+  WRONG: p_up = 0.55 just because the role label says "bullish."
+
+Example C — A "Macro & Sector" bear-specialist sees a moderately bullish chart
+(above MA50 but slightly below MA200, RSI 55, sector mixed):
+  CORRECT: p_up = 0.61. Some bullish elements, some headwinds — honest read leans up.
+
+Example D — A "Volume & Flow" bull-specialist sees a moderately bearish chart
+(volume divergence, distribution pattern, RSI rolling over):
+  CORRECT: p_up = 0.34. Some bullish elements possible, but flow says weakness.
+
+Example E — Genuinely mixed setup (truly ambiguous):
+  CORRECT: p_up around 0.45–0.55 with LOW confidence. Coin-flip is honest here.
+
+KEY TAKEAWAY: The numbers above are illustrative — DO NOT copy them verbatim.
+Calibrate your own p_up to the SPECIFIC stock data you receive. Use any value in
+[0.0, 1.0] that reflects your honest probability assessment.
 """
 
 
@@ -196,12 +215,13 @@ def _clamp(val: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 
 def _repair_agent_json(raw: str) -> dict:
-    score = re.search(r'"score"\s*:\s*([\d.]+)', raw)
+    # Accept either "p_up" (new) or "score" (legacy / model occasionally regresses).
+    p_up = re.search(r'"p_up"\s*:\s*([\d.]+)', raw) or re.search(r'"score"\s*:\s*([\d.]+)', raw)
     confidence = re.search(r'"confidence"\s*:\s*([\d.]+)', raw)
     reasoning = re.search(r'"reasoning"\s*:\s*"([^"]*)', raw)
-    if score:
+    if p_up:
         return {
-            "score": float(score.group(1)),
+            "p_up": float(p_up.group(1)),
             "confidence": float(confidence.group(1)) if confidence else 0.5,
             "reasoning": reasoning.group(1) if reasoning else "Partial response recovered",
             "key_points": [],
@@ -252,11 +272,13 @@ def run_agent(
             except json.JSONDecodeError:
                 result = _repair_agent_json(raw)
 
+            # Accept either p_up (new) or score (legacy fallback)
+            p_up_val = result.get("p_up", result.get("score", 0.5))
             return AgentVerdict(
                 agent_name=agent_config["name"],
                 agent_type=agent_config.get("type", "unknown"),
                 stance=stance,
-                score=_clamp(float(result.get("score", 0.5))),
+                p_up=_clamp(float(p_up_val)),
                 confidence=_clamp(float(result.get("confidence", 0.5))),
                 reasoning=result.get("reasoning", ""),
                 key_points=result.get("key_points", []),
@@ -272,7 +294,7 @@ def run_agent(
                 agent_name=agent_config["name"],
                 agent_type=agent_config.get("type", "unknown"),
                 stance=stance,
-                score=0.5,
+                p_up=0.5,
                 confidence=0.1,
                 reasoning=f"Analysis error: {e}",
                 key_points=[],
@@ -286,12 +308,12 @@ def run_all_agents(
     chart_context: str,
 ) -> tuple[list[AgentVerdict], list[AgentVerdict]]:
     """
-    Run all 10 agents SEQUENTIALLY with delay between calls.
-    This stays under Groq's free-tier 12k TPM cap by spreading ~17k tokens
-    across 70+ seconds rather than burning them in 10 seconds.
-    Total runtime ≈ 80–120 seconds per stock.
+    Run all 6 agents SEQUENTIALLY with delay between calls.
+    Stays under Groq's 70b 12k-TPM free-tier cap by spreading the calls.
+    Total runtime ≈ 50–90 seconds per stock.
     """
-    print(f"\n🤖 Running 10 agents sequentially for {signal.ticker} (delay {AGENT_DELAY_SEC:.0f}s)...")
+    total = len(BULL_AGENTS) + len(BEAR_AGENTS)
+    print(f"\n🤖 Running {total} agents sequentially for {signal.ticker} (delay {AGENT_DELAY_SEC:.0f}s)...")
 
     tasks = [("bull", a) for a in BULL_AGENTS] + [("bear", a) for a in BEAR_AGENTS]
 
@@ -303,7 +325,7 @@ def run_all_agents(
         emoji = "🟢" if stance == "bull" else "🔴"
         failed = verdict.confidence <= 0.1 and verdict.reasoning.startswith("Analysis error")
         marker = "❌" if failed else "✅"
-        print(f"   {emoji} {marker} {verdict.agent_name}: score={verdict.score:.2f}")
+        print(f"   {emoji} {marker} {verdict.agent_name}: p_up={verdict.p_up:.2f} conf={verdict.confidence:.2f}")
 
         if stance == "bull":
             bull_verdicts.append(verdict)

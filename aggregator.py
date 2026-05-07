@@ -192,35 +192,42 @@ def aggregate(
     bear_verdicts: list[AgentVerdict],
     price_levels: Optional[PriceLevels] = None,
 ) -> AnalysisResult:
-    # Exclude failed agents from probability math so 50/50 fallbacks don't dilute real votes.
+    # New contract: every agent (bull-leaning or bear-leaning specialty) returns
+    # its own directional p_up. We average ALL of them — the bull/bear split is
+    # only kept for evidence-lens diversity, not for any normalization step.
+    # This prevents the old "both sides hedge to ~0.5 → normalize to 50/50" trap.
     real_bulls = [v for v in bull_verdicts if not _is_failed(v)]
     real_bears = [v for v in bear_verdicts if not _is_failed(v)]
+    real_all = real_bulls + real_bears
+
     failed_count = (len(bull_verdicts) - len(real_bulls)) + (len(bear_verdicts) - len(real_bears))
     total_count = len(bull_verdicts) + len(bear_verdicts)
 
-    def weighted_avg(verdicts: list[AgentVerdict]) -> float:
-        total_weight = sum(v.confidence for v in verdicts)
+    if real_all:
+        total_weight = sum(v.confidence for v in real_all)
         if total_weight == 0:
-            return 0.5
-        return sum(v.score * v.confidence for v in verdicts) / total_weight
-
-    bull_raw = weighted_avg(real_bulls) if real_bulls else 0.5
-    bear_raw = weighted_avg(real_bears) if real_bears else 0.5
-
-    total = bull_raw + bear_raw
-    if total == 0:
-        bull_prob = bear_prob = 0.5
+            bull_prob = 0.5
+        else:
+            bull_prob = round(
+                sum(v.p_up * v.confidence for v in real_all) / total_weight,
+                4,
+            )
     else:
-        bull_prob = round(bull_raw / total, 4)
-        bear_prob = round(bear_raw / total, 4)
+        bull_prob = 0.5
+
+    bear_prob = round(1 - bull_prob, 4)
 
     # If too many agents failed, don't recommend ENTRY no matter what the math says.
     reliability = 1 - failed_count / total_count if total_count else 0
     should_enter = bull_prob >= THRESHOLD and reliability >= 0.5
 
-    # Pick top reasons from real verdicts only (fall back to fallbacks if none real)
-    top_bull = max(real_bulls or bull_verdicts, key=lambda v: v.score * v.confidence)
-    top_bear = max(real_bears or bear_verdicts, key=lambda v: v.score * v.confidence)
+    # Pick the most "informative" verdict from each side: highest confidence,
+    # tiebroken by how decisive p_up is (distance from 0.5).
+    def informativeness(v: AgentVerdict) -> float:
+        return v.confidence * abs(v.p_up - 0.5)
+
+    top_bull = max(real_bulls or bull_verdicts, key=informativeness)
+    top_bear = max(real_bears or bear_verdicts, key=informativeness)
 
     return AnalysisResult(
         ticker=ticker,
