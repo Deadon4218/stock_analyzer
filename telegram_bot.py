@@ -76,8 +76,9 @@ def format_broadcast_report(results) -> str:
     for r in results:
         emoji = "✅" if r.should_enter else "❌"
         direction = getattr(r, "direction", "long").upper()
+        mode = getattr(r, "analysis_mode", "signal").upper()
         line = (
-            f"{emoji} <b>{_esc(r.ticker)}</b> {direction} | "
+            f"{emoji} <b>{_esc(r.ticker)}</b> {mode} {direction} | "
             f"🟢 {r.bull_probability:.1%} | "
             f"🔴 {r.bear_probability:.1%} | "
             f"Ratio: {r.probability_ratio():.2f}x"
@@ -106,8 +107,9 @@ def format_broadcast_report(results) -> str:
 def format_personal_report(ticker: str, result) -> str:
     emoji = "✅" if result.should_enter else "❌"
     direction = getattr(result, "direction", "long").upper()
+    mode = getattr(result, "analysis_mode", "signal").upper()
     lines = [
-        f"{emoji} <b>{_esc(ticker)}</b> {direction}",
+        f"{emoji} <b>{_esc(ticker)}</b> {mode} {direction}",
         f"🟢 Bull: {result.bull_probability:.1%} | 🔴 Bear: {result.bear_probability:.1%}",
         f"Ratio: {result.probability_ratio():.2f}x",
     ]
@@ -141,8 +143,9 @@ def format_personal_summary(user_results: list[tuple[str, object]]) -> str:
             continue
         emoji = "✅" if result.should_enter else "⚠️"
         direction = getattr(result, "direction", "long").upper()
+        mode = getattr(result, "analysis_mode", "signal").upper()
         line = (
-            f"{emoji} <b>{_esc(ticker)}</b> {direction} | "
+            f"{emoji} <b>{_esc(ticker)}</b> {mode} {direction} | "
             f"🟢 {result.bull_probability:.1%} | 🔴 {result.bear_probability:.1%}"
         )
         if result.price_levels and result.price_levels.entry:

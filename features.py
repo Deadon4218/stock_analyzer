@@ -53,6 +53,7 @@ def extract_features(
 
     return {
         "direction": signal.direction,
+        "analysis_mode": signal.analysis_mode,
         "has_signal_entry": signal.entry_price is not None,
         "has_signal_take_profit": signal.take_profit is not None,
         "has_signal_stop_loss": signal.stop_loss is not None,

@@ -389,7 +389,7 @@ function renderRecent(records) {
     <table>
       <thead>
         <tr>
-          <th>Date</th><th>Ticker</th><th>Dir</th><th>Verdict</th>
+          <th>Date</th><th>Ticker</th><th>Mode</th><th>Dir</th><th>Verdict</th>
           <th class="num">Bull%</th><th class="num">Bear%</th><th class="num">Classic</th>
           <th class="num">Entry</th><th class="num">TP</th><th class="num">SL</th>
           <th>Outcome</th><th>Source</th>
@@ -400,6 +400,7 @@ function renderRecent(records) {
           <tr>
             <td>${r.ts.slice(0, 16).replace("T", " ")}</td>
             <td><strong>${r.ticker}</strong></td>
+            <td>${(r.analysis_mode || "signal").toUpperCase()}</td>
             <td>${(r.direction || "long").toUpperCase()}</td>
             <td class="verdict-${r.verdict.toLowerCase()}">${r.verdict}</td>
             <td class="num">${(r.bull_prob * 100).toFixed(0)}%</td>

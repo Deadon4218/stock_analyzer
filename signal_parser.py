@@ -16,6 +16,7 @@ class StockSignal:
     raw_message: str = ""
     author: str = ""
     timestamp: str = ""
+    analysis_mode: str = "signal"  # signal=trade setup, scan=watchlist/market scan
     image_urls: list = field(default_factory=list)
 
     def risk_reward_ratio(self) -> Optional[float]:
@@ -30,7 +31,7 @@ class StockSignal:
     def __str__(self):
         rr = self.risk_reward_ratio()
         rr_str = f"R:R {rr:.2f}" if rr else "R:R N/A"
-        parts = [f"📊 {self.ticker}"]
+        parts = [f"📊 {self.ticker}", self.analysis_mode.upper()]
         if self.entry_price:
             parts.append(f"Entry: {self.entry_price}")
         if self.breakout_level:
@@ -190,6 +191,7 @@ def extract_signals_from_messages(messages: list[dict]) -> list[StockSignal]:
             raw_message=source_msg.get("content", "") if source_msg else "",
             author=source_msg.get("author", "") if source_msg else "",
             timestamp=source_msg.get("timestamp", "") if source_msg else "",
+            analysis_mode="signal",
             image_urls=source_msg.get("image_urls", []) if source_msg else [],
         ))
 

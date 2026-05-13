@@ -121,6 +121,37 @@ class CoreLogicTest(unittest.TestCase):
         self.assertGreater(classic.p_up, 0.5)
         self.assertGreater(classic.confidence, 0.5)
 
+    def test_scan_mode_never_recommends_entry(self):
+        result = aggregate(
+            "TEST",
+            [verdict("bull", "bull", 0.95)],
+            [verdict("bear", "bear", 0.9)],
+            direction="long",
+            analysis_mode="scan",
+            agent_weights={},
+        )
+        self.assertFalse(result.should_enter)
+        self.assertEqual(result.analysis_mode, "scan")
+        self.assertIn("watchlist scan", result.entry_block_reasons[0])
+
+    def test_long_signal_blocks_when_current_price_far_above_entry(self):
+        signal = StockSignal(ticker="TEST", entry_price=100, direction="long")
+        data = stock_data(price=105, atr=2)
+        levels = calculate_price_levels(signal, data, [])
+        features = extract_features(signal, data, levels, [])
+        result = aggregate(
+            "TEST",
+            [verdict("bull", "bull", 0.95)],
+            [verdict("bear", "bear", 0.9)],
+            levels,
+            direction="long",
+            features=features,
+            analysis_mode="signal",
+            agent_weights={},
+        )
+        self.assertFalse(result.should_enter)
+        self.assertTrue(any("above entry" in reason for reason in result.entry_block_reasons))
+
 
 if __name__ == "__main__":
     unittest.main()

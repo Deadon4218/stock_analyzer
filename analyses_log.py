@@ -42,6 +42,7 @@ def log_analysis(result, source: str):
         "ts": ts,
         "ticker": result.ticker,
         "direction": result.direction,
+        "analysis_mode": result.analysis_mode,
         "source": source,
         "verdict": "ENTRY" if result.should_enter else "SKIP",
         "score_contract": "directional_p_up",

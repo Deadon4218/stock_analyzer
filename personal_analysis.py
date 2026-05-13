@@ -14,7 +14,7 @@ from features import extract_features
 
 
 def analyze_ticker(ticker: str, source: str = "personal") -> AnalysisResult | None:
-    signal = StockSignal(ticker=ticker, direction="long")
+    signal = StockSignal(ticker=ticker, direction="long", analysis_mode="scan")
 
     data = fetch_stock_data(ticker)
     if data.error:
@@ -37,6 +37,7 @@ def analyze_ticker(ticker: str, source: str = "personal") -> AnalysisResult | No
         price_levels,
         direction=signal.direction,
         features=features,
+        analysis_mode=signal.analysis_mode,
     )
     log_analysis(result, source=source)
     return result

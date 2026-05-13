@@ -101,6 +101,7 @@ def main():
             price_levels,
             direction=signal.direction,
             features=features,
+            analysis_mode=signal.analysis_mode,
         )
         results.append(result)
         log_analysis(result, source="broadcast")

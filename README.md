@@ -2,6 +2,8 @@
 
 Automated Discord signal analyzer + personal watchlist tracker. 6 AI evidence lenses plus 1 deterministic classic technical agent estimate directional upside probability (`p_up`) and decide whether each setup passes a 67% entry threshold. Sends results via Telegram.
 
+Discord messages are treated as trade **signals**. Personal watchlists are treated as **scans**: they can highlight strength/weakness, but they do not generate ENTRY recommendations unless converted into a real trade signal.
+
 ## How it works
 
 Four GitHub Actions cron jobs:
@@ -100,4 +102,5 @@ python webhook_handler.py   # process pending Telegram commands
 
 - The 6 AI prompts and 1 classic rules agent are shared across all users
 - Each user has their own private watchlist
+- `MAX_ENTRY_GAP_PCT` (default 3%) blocks stale signals when current price has already moved too far away from entry
 - Groq free tier is rate-limited (~12k TPM) — `PERSONAL_DELAY_SECONDS` spaces out calls

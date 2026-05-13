@@ -9,6 +9,7 @@ from stock_data import StockData
 THRESHOLD = 0.67
 MIN_RR = 2.0
 MIN_ENTRY_RR = float(os.environ.get("MIN_ENTRY_RR", 1.5))
+MAX_ENTRY_GAP_PCT = float(os.environ.get("MAX_ENTRY_GAP_PCT", 3.0))
 
 
 @dataclass
@@ -119,6 +120,7 @@ def calculate_price_levels(
 class AnalysisResult:
     ticker: str
     direction: str
+    analysis_mode: str
     bull_probability: float
     bear_probability: float
     should_enter: bool
@@ -155,6 +157,7 @@ class AnalysisResult:
             "=" * 60,
             f"📊 Analysis: {self.ticker}",
             "=" * 60,
+            f"Mode:               {self.analysis_mode.upper()}",
             f"Direction:          {self.direction.upper()}",
             f"🟢 Bull probability:  {self.bull_probability:.1%}",
             f"🔴 Bear probability:  {self.bear_probability:.1%}",
@@ -178,6 +181,8 @@ class AnalysisResult:
         lines.append("")
         if self.should_enter:
             lines.append(f"✅ {self.direction.upper()} ENTRY RECOMMENDED!")
+        elif self.analysis_mode == "scan":
+            lines.append("🔎 WATCHLIST SCAN — no trade signal")
         else:
             lines.append("❌ DO NOT ENTER — below 67% threshold")
         for reason in self.entry_block_reasons:
@@ -216,6 +221,7 @@ def aggregate(
     direction: str = "long",
     features: Optional[dict] = None,
     agent_weights: Optional[dict[str, float]] = None,
+    analysis_mode: str = "signal",
 ) -> AnalysisResult:
     # New contract: every agent (bull-leaning or bear-leaning specialty) returns
     # its own directional p_up. We average ALL of them — the bull/bear split is
@@ -251,10 +257,20 @@ def aggregate(
     # If too many agents failed, don't recommend ENTRY no matter what the math says.
     reliability = 1 - failed_count / total_count if total_count else 0
     direction = direction if direction in ("long", "short") else "long"
+    features = features or {}
+    analysis_mode = analysis_mode if analysis_mode in ("signal", "scan") else features.get("analysis_mode", "signal")
     trade_prob = bull_prob if direction == "long" else bear_prob
     entry_block_reasons = []
+    if analysis_mode == "scan":
+        entry_block_reasons.append("watchlist scan only; no external trade signal")
     if price_levels and price_levels.rr_ratio is not None and price_levels.rr_ratio < MIN_ENTRY_RR:
         entry_block_reasons.append(f"R:R {price_levels.rr_ratio:.2f} is below {MIN_ENTRY_RR:.2f}")
+    entry_gap = features.get("entry_gap_pct")
+    if analysis_mode == "signal" and entry_gap is not None:
+        if direction == "long" and entry_gap < -MAX_ENTRY_GAP_PCT:
+            entry_block_reasons.append(f"current price is {abs(entry_gap):.1f}% above entry")
+        elif direction == "short" and entry_gap > MAX_ENTRY_GAP_PCT:
+            entry_block_reasons.append(f"current price is {abs(entry_gap):.1f}% below short entry")
     should_enter = trade_prob >= THRESHOLD and reliability >= 0.5 and not entry_block_reasons
 
     # Pick the most "informative" verdict from each side: highest confidence,
@@ -269,6 +285,7 @@ def aggregate(
     return AnalysisResult(
         ticker=ticker,
         direction=direction,
+        analysis_mode=analysis_mode,
         bull_probability=bull_prob,
         bear_probability=bear_prob,
         should_enter=should_enter,
@@ -279,7 +296,7 @@ def aggregate(
         price_levels=price_levels,
         failed_count=failed_count,
         total_count=total_count,
-        features=features or {},
+        features=features,
         agent_weights=agent_weights,
         entry_block_reasons=entry_block_reasons,
     )

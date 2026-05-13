@@ -151,6 +151,7 @@ def run_cycle():
             price_levels,
             direction=signal.direction,
             features=features,
+            analysis_mode=signal.analysis_mode,
         )
         results.append(result)
 
