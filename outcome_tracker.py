@@ -40,6 +40,7 @@ def _check_outcome(record: dict, hist) -> tuple[str, str | None, float | None]:
     """
     tp = record.get("take_profit")
     sl = record.get("stop_loss")
+    direction = record.get("direction", "long")
     ts = record["ts"]
     start = _parse_ts(ts)
     age_days = (datetime.now(timezone.utc) - start).days
@@ -58,13 +59,22 @@ def _check_outcome(record: dict, hist) -> tuple[str, str | None, float | None]:
             continue
 
         high, low = float(row["High"]), float(row["Low"])
+        open_price = float(row["Open"])
         # Conservative: if both possible same day, assume SL hit first (prevents fake wins)
-        if low <= sl:
-            return ("sl_hit", date.strftime("%Y-%m-%d"),
-                    round((sl - row["Open"]) / row["Open"] * 100, 2))
-        if high >= tp:
-            return ("tp_hit", date.strftime("%Y-%m-%d"),
-                    round((tp - row["Open"]) / row["Open"] * 100, 2))
+        if direction == "short":
+            if high >= sl:
+                return ("sl_hit", date.strftime("%Y-%m-%d"),
+                        round((open_price - sl) / open_price * 100, 2))
+            if low <= tp:
+                return ("tp_hit", date.strftime("%Y-%m-%d"),
+                        round((open_price - tp) / open_price * 100, 2))
+        else:
+            if low <= sl:
+                return ("sl_hit", date.strftime("%Y-%m-%d"),
+                        round((sl - open_price) / open_price * 100, 2))
+            if high >= tp:
+                return ("tp_hit", date.strftime("%Y-%m-%d"),
+                        round((tp - open_price) / open_price * 100, 2))
 
     return ("expired", None, None) if age_days >= EXPIRY_DAYS else ("still_open", None, None)
 

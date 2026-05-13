@@ -1,138 +1,90 @@
 {
   "agents": [
     {
-      "name": "Momentum Analyst",
+      "name": "Momentum & Trend",
       "type": "technical_momentum",
-      "prompt": "You are a bullish momentum analyst. Analyze recent price direction and check for growing buying pressure. Look at daily/weekly/monthly % changes, whether the stock is consistently rising, and if there's a higher lows pattern.",
+      "prompt": "Your specialty: momentum and trend continuation. Examine daily/weekly/monthly % changes, MA50/MA200 alignment, higher-lows pattern, and whether the trend supports a long entry. Pay attention to chart trend analysis if available.",
       "stance": "bull",
       "category": {
-        "label": "Technical \u00b7 Momentum",
-        "desc": "Detects buying pressure via daily/weekly/monthly % changes, higher-lows patterns."
+        "label": "Technical - Momentum",
+        "desc": "Checks recent momentum, trend continuation, MA alignment, and higher-lows structure."
       }
     },
     {
-      "name": "Volume Bull",
-      "type": "technical_volume",
-      "prompt": "You are a bullish volume analyst. Analyze trading volume. Look for: above-average volume on up days (accumulation), today's volume vs 10-day average ratio, and signs of institutional buying.",
-      "stance": "bull",
-      "category": {
-        "label": "Technical \u00b7 Volume",
-        "desc": "Validates moves through trading volume \u2014 accumulation, institutional buying."
-      }
-    },
-    {
-      "name": "Technical Bull",
+      "name": "Structure & Levels",
       "type": "technical_indicators",
-      "prompt": "You are a bullish technical analyst. Check: RSI below 70 (not overbought), stock above MA50 and MA200, distance from 52-week high, and whether the suggested entry is above strong support. Pay special attention to chart analysis data if available.",
+      "prompt": "Your specialty: technical structure and key levels. Examine RSI, distance from 52-week high, support/resistance from chart analysis, and whether the entry sits above strong support.",
       "stance": "bull",
       "category": {
-        "label": "Technical \u00b7 Indicators",
-        "desc": "Uses RSI, MA50, MA200, support/resistance distance."
+        "label": "Technical - Structure",
+        "desc": "Uses RSI, 52-week context, support/resistance, and entry quality."
       }
     },
     {
-      "name": "Risk/Reward Analyst",
-      "type": "risk_management",
-      "prompt": "You are a bullish R:R analyst. Calculate the risk/reward ratio. The signal is attractive if: R:R >= 2, stop loss is not too far from entry, and the target is realistic based on ATR volatility.",
+      "name": "Volume & Flow",
+      "type": "technical_volume",
+      "prompt": "Your specialty: volume confirmation and order flow. Examine today's volume vs 10-day average, accumulation patterns, and whether volume confirms the recent price move.",
       "stance": "bull",
       "category": {
-        "label": "Risk Management",
-        "desc": "Evaluates R:R ratio, stop-loss placement vs ATR volatility, target realism."
+        "label": "Technical - Volume",
+        "desc": "Validates moves through volume confirmation, accumulation, and divergence."
       }
     },
     {
-      "name": "Sentiment Bull",
-      "type": "sentiment",
-      "prompt": "You are a bullish sentiment analyst. Analyze recent Discord messages about this stock. Look for: positive mentions, how many people are talking about it, whether there's consensus, and if people have entered successfully before.",
-      "stance": "bull",
-      "category": {
-        "label": "Sentiment",
-        "desc": "Reads Discord chatter \u2014 consensus, prior successful entries, mention frequency."
-      }
-    },
-    {
-      "name": "Reversal Detector",
+      "name": "Reversal & Overbought",
       "type": "technical_pattern",
-      "prompt": "You are a bearish reversal analyst. Look for: lower highs, support breakdown, divergence between price and volume, and whether the stock is near strong resistance.",
+      "prompt": "Your specialty: reversal patterns and overbought conditions. Examine RSI > 70, distance already run from 52-week high, lower-highs forming, and volume/price divergence.",
       "stance": "bear",
       "category": {
-        "label": "Technical \u00b7 Pattern",
-        "desc": "Looks for reversal patterns: lower highs, breakdowns, divergence."
+        "label": "Technical - Reversal",
+        "desc": "Looks for exhaustion, lower highs, reversal risk, and bearish divergence."
       }
     },
     {
-      "name": "Overbought Scanner",
-      "type": "technical_oscillator",
-      "prompt": "You are a bearish overbought analyst. Check: RSI above 70, distance from 52-week high, how much it has risen recently, and whether volume declined during the rise (bearish divergence).",
-      "stance": "bear",
-      "category": {
-        "label": "Technical \u00b7 Oscillator",
-        "desc": "RSI overbought/oversold + bearish divergence with volume."
-      }
-    },
-    {
-      "name": "Market Condition Bear",
+      "name": "Macro & Sector",
       "type": "macro_trend",
-      "prompt": "You are a bearish macro analyst. Check: is the stock below MA200 (primary downtrend), is the sector weak, and is the stock failing to hold support levels.",
+      "prompt": "Your specialty: macro/sector headwinds and primary trend. Examine whether the stock is below MA200, sector weakness, and whether the entry is against the long-term trend.",
       "stance": "bear",
       "category": {
-        "label": "Macro \u00b7 Trend",
-        "desc": "Primary trend (above/below MA200), sector strength, support holds/breaks."
+        "label": "Macro - Trend",
+        "desc": "Checks primary trend, MA200 context, sector headwinds, and countertrend risk."
       }
     },
     {
-      "name": "Stop Loss Proximity",
+      "name": "Risk & Stop Distance",
       "type": "risk_management",
-      "prompt": "You are a bearish risk analyst. Calculate: how far the SL is from entry in %, whether SL is below clear support, and whether normal ATR volatility could trigger the stop.",
+      "prompt": "Your specialty: risk/reward realism and stop-loss survival. Examine R:R, whether the SL is too tight relative to ATR, and whether the target is realistic.",
       "stance": "bear",
       "category": {
         "label": "Risk Management",
-        "desc": "Evaluates R:R ratio, stop-loss placement vs ATR volatility, target realism."
-      }
-    },
-    {
-      "name": "Counter Trend Bear",
-      "type": "macro_trend",
-      "prompt": "You are a bearish trend analyst. Check if the suggested entry is against the main trend. If the stock is in a long-term downtrend \u2014 a long entry is risky. Analyze the 20-day and 5-day trend. Check chart analysis if available.",
-      "stance": "bear",
-      "category": {
-        "label": "Macro \u00b7 Trend",
-        "desc": "Primary trend (above/below MA200), sector strength, support holds/breaks."
+        "desc": "Evaluates R:R, stop-loss placement vs ATR volatility, and target realism."
       }
     }
   ],
   "strategies": {
     "technical_momentum": {
-      "label": "Technical \u00b7 Momentum",
-      "desc": "Detects buying pressure via daily/weekly/monthly % changes, higher-lows patterns."
-    },
-    "technical_volume": {
-      "label": "Technical \u00b7 Volume",
-      "desc": "Validates moves through trading volume \u2014 accumulation, institutional buying."
+      "label": "Technical - Momentum",
+      "desc": "Checks recent momentum, trend continuation, MA alignment, and higher-lows structure."
     },
     "technical_indicators": {
-      "label": "Technical \u00b7 Indicators",
-      "desc": "Uses RSI, MA50, MA200, support/resistance distance."
+      "label": "Technical - Structure",
+      "desc": "Uses RSI, 52-week context, support/resistance, and entry quality."
+    },
+    "technical_volume": {
+      "label": "Technical - Volume",
+      "desc": "Validates moves through volume confirmation, accumulation, and divergence."
     },
     "technical_pattern": {
-      "label": "Technical \u00b7 Pattern",
-      "desc": "Looks for reversal patterns: lower highs, breakdowns, divergence."
+      "label": "Technical - Reversal",
+      "desc": "Looks for exhaustion, lower highs, reversal risk, and bearish divergence."
     },
-    "technical_oscillator": {
-      "label": "Technical \u00b7 Oscillator",
-      "desc": "RSI overbought/oversold + bearish divergence with volume."
-    },
-    "sentiment": {
-      "label": "Sentiment",
-      "desc": "Reads Discord chatter \u2014 consensus, prior successful entries, mention frequency."
+    "macro_trend": {
+      "label": "Macro - Trend",
+      "desc": "Checks primary trend, MA200 context, sector headwinds, and countertrend risk."
     },
     "risk_management": {
       "label": "Risk Management",
-      "desc": "Evaluates R:R ratio, stop-loss placement vs ATR volatility, target realism."
-    },
-    "macro_trend": {
-      "label": "Macro \u00b7 Trend",
-      "desc": "Primary trend (above/below MA200), sector strength, support holds/breaks."
+      "desc": "Evaluates R:R, stop-loss placement vs ATR volatility, and target realism."
     }
   }
 }

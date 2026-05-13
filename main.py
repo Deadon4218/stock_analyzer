@@ -2,7 +2,7 @@
 Stock Signal Analyzer v2
 ========================
 Reads signals from Discord (Hebrew text + TradingView charts),
-analyzes with 10 AI agents (5 bull, 5 bear),
+analyzes with 6 AI evidence lenses (3 bull, 3 bear/risk),
 and gives buy/skip decision based on 67% threshold.
 
 Setup:
@@ -41,7 +41,7 @@ def run_cycle():
     Single analysis cycle:
     1. Fetch messages from Discord
     2. Extract signals with LLM (handles Hebrew)
-    3. For each signal: analyze charts + fetch market data + run 10 agents
+    3. For each signal: analyze charts + fetch market data + run 6 agents
     4. Print verdict
     """
     channel_id = os.environ["DISCORD_CHANNEL_ID"]
@@ -132,13 +132,13 @@ def run_cycle():
             for m in related_messages[-20:]
         ])
 
-        # 3e: Run 10 agents in parallel
+        # 3e: Run 6 agents sequentially
         bull_verdicts, bear_verdicts = run_all_agents(
             signal, data, messages_context, chart_context
         )
 
         # 3f: Aggregate
-        result = aggregate(signal.ticker, bull_verdicts, bear_verdicts, price_levels)
+        result = aggregate(signal.ticker, bull_verdicts, bear_verdicts, price_levels, direction=signal.direction)
         results.append(result)
 
         # Print report
@@ -176,7 +176,7 @@ def main():
 
     print("🚀 Stock Signal Analyzer v2 started")
     print(f"   Polling: every {os.environ.get('POLL_MIN_MINUTES', 5)}–{os.environ.get('POLL_MAX_MINUTES', 15)} min (random)")
-    print(f"   Features: Hebrew text parsing, TradingView chart analysis, 10 AI agents")
+    print(f"   Features: Hebrew text parsing, TradingView chart analysis, 6 AI evidence lenses")
     print("   Press Ctrl+C to stop\n")
 
     while True:

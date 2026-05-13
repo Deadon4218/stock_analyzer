@@ -116,7 +116,7 @@
 <body>
 
 <h1>📊 Stock Analyzer Dashboard</h1>
-<p class="subtitle">10 AI agents, 8 strategy types, 67% threshold for entry. <a href="https://github.com/Deadon4218/stock_analyzer" target="_blank">View source</a></p>
+<p class="subtitle">6 AI evidence lenses, directional p_up scoring, 67% threshold for entry. <a href="https://github.com/Deadon4218/stock_analyzer" target="_blank">View source</a></p>
 
 <h2>Live Stats</h2>
 <div class="grid" id="kpis"></div>
@@ -124,10 +124,10 @@
 <h2>Strategy Types</h2>
 <div class="agent-grid" id="strategies"></div>
 
-<h2>The 10 Agents</h2>
+<h2>The 6 Agents</h2>
 <div class="agent-grid" id="agentRoster"></div>
 
-<h2>Per-Agent Activity (avg score &amp; confidence)</h2>
+<h2>Per-Agent Activity (avg p_up &amp; confidence)</h2>
 <div class="chart-wrap" id="agentScoresWrap"><canvas id="agentScoresChart"></canvas></div>
 
 <h2>Strategy Accuracy</h2>
@@ -149,6 +149,7 @@ const REPO = "Deadon4218/stock_analyzer";
 const ANALYSES_URL = `https://raw.githubusercontent.com/${REPO}/main/data/analyses.jsonl`;
 const AGENTS_URL = `https://raw.githubusercontent.com/${REPO}/main/data/agents.json`;
 const HIGH_SCORE = 0.6;
+const LOW_SCORE = 0.4;
 
 async function fetchText(url) {
   const r = await fetch(url + "?t=" + Date.now());
@@ -219,7 +220,7 @@ function renderAgentRoster(agents, perAgentStats) {
     const stance = a.stance;
     const cat = a.category && a.category.label || a.type;
     const statLine = stats.n
-      ? `<div class="agent-stat">📈 ${stats.n} call(s) — avg score ${(stats.avgScore * 100).toFixed(0)}%, avg conf ${(stats.avgConf * 100).toFixed(0)}%</div>`
+      ? `<div class="agent-stat">📈 ${stats.n} call(s) — avg p_up ${(stats.avgScore * 100).toFixed(0)}%, avg conf ${(stats.avgConf * 100).toFixed(0)}%</div>`
       : `<div class="agent-stat">No calls yet</div>`;
     return `
       <div class="agent-card ${stance}">
@@ -269,7 +270,7 @@ function renderAgentScoresChart(perAgent) {
     data: {
       labels: names,
       datasets: [
-        { label: "Avg score", data: names.map(n => +(perAgent[n].avgScore * 100).toFixed(1)), backgroundColor: "#58a6ff" },
+        { label: "Avg p_up", data: names.map(n => +(perAgent[n].avgScore * 100).toFixed(1)), backgroundColor: "#58a6ff" },
         { label: "Avg confidence", data: names.map(n => +(perAgent[n].avgConf * 100).toFixed(1)), backgroundColor: "#d29922" },
       ],
     },
@@ -288,12 +289,13 @@ function renderAgentScoresChart(perAgent) {
 function aggregateAccuracyBy(records, keyFn) {
   const buckets = {};
   for (const r of records.filter(isResolved)) {
-    const bullish = r.outcome === "tp_hit";
+    const bullish = actualUpOutcome(r);
     for (const a of r.agents || []) {
-      if (a.score < HIGH_SCORE) continue;
+      const prediction = agentPrediction(r, a);
+      if (prediction === null) continue;
       const k = keyFn(a);
       if (!buckets[k]) buckets[k] = { correct: 0, total: 0 };
-      const correct = (a.stance === "bull" && bullish) || (a.stance === "bear" && !bullish);
+      const correct = prediction === bullish;
       if (correct) buckets[k].correct++;
       buckets[k].total++;
     }
@@ -301,6 +303,37 @@ function aggregateAccuracyBy(records, keyFn) {
   return Object.entries(buckets)
     .map(([k, v]) => ({ key: k, accuracy: v.correct / v.total, total: v.total }))
     .sort((a, b) => b.accuracy - a.accuracy);
+}
+
+function actualUpOutcome(record) {
+  if (record.direction === "short") return record.outcome === "sl_hit";
+  return record.outcome === "tp_hit";
+}
+
+function usesDirectionalScore(record) {
+  if (record.score_contract === "directional_p_up") return true;
+  const currentNames = new Set([
+    "Momentum & Trend",
+    "Structure & Levels",
+    "Volume & Flow",
+    "Reversal & Overbought",
+    "Macro & Sector",
+    "Risk & Stop Distance",
+  ]);
+  const agents = record.agents || [];
+  return agents.length === 6 || agents.some(a => currentNames.has(a.name));
+}
+
+function agentPrediction(record, agent) {
+  const score = agent.score;
+  if (typeof score !== "number") return null;
+  if (usesDirectionalScore(record)) {
+    if (score >= HIGH_SCORE) return true;
+    if (score <= LOW_SCORE) return false;
+    return null;
+  }
+  if (score < HIGH_SCORE) return null;
+  return agent.stance === "bull";
 }
 
 function renderAccuracyChart(containerId, rows, emptyText) {
@@ -353,7 +386,7 @@ function renderRecent(records) {
     <table>
       <thead>
         <tr>
-          <th>Date</th><th>Ticker</th><th>Verdict</th>
+          <th>Date</th><th>Ticker</th><th>Dir</th><th>Verdict</th>
           <th class="num">Bull%</th><th class="num">Bear%</th>
           <th class="num">Entry</th><th class="num">TP</th><th class="num">SL</th>
           <th>Outcome</th><th>Source</th>
@@ -364,6 +397,7 @@ function renderRecent(records) {
           <tr>
             <td>${r.ts.slice(0, 16).replace("T", " ")}</td>
             <td><strong>${r.ticker}</strong></td>
+            <td>${(r.direction || "long").toUpperCase()}</td>
             <td class="verdict-${r.verdict.toLowerCase()}">${r.verdict}</td>
             <td class="num">${(r.bull_prob * 100).toFixed(0)}%</td>
             <td class="num">${(r.bear_prob * 100).toFixed(0)}%</td>

@@ -121,8 +121,9 @@ market data, chart analysis, and recent Discord context. Return ONLY valid JSON 
 }
 
 DEFINITIONS:
-  p_up = your probability that this stock will move UP and the long trade will succeed
-         (reach take-profit before stop-loss) over a typical short-term horizon (1-3 weeks).
+  p_up = your probability that this stock will move UP over a typical short-term horizon
+         (1-3 weeks). For LONG signals, high p_up supports entry. For SHORT signals,
+         low p_up supports entry.
   confidence = how confident you are in your p_up given the available data.
 
 CRITICAL RULES:
@@ -181,6 +182,7 @@ def _build_user_prompt(
     return f"""
 Stock signal to analyze:
 - Ticker: {signal.ticker}
+- Direction: {signal.direction.upper()} ({'high p_up is good' if signal.direction == 'long' else 'low p_up is good'})
 - Suggested entry: {signal.entry_price or 'not specified'}
 - Take profit: {signal.take_profit or 'not specified'}
 - Stop loss: {signal.stop_loss or 'not specified'}

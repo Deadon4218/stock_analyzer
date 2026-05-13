@@ -87,7 +87,7 @@ def main():
         msg_ctx = "\n".join(f"[{m['author']}]: {m['content']}" for m in related[-15:])
 
         bull, bear = run_all_agents(signal, data, msg_ctx, chart_context)
-        result = aggregate(signal.ticker, bull, bear, price_levels)
+        result = aggregate(signal.ticker, bull, bear, price_levels, direction=signal.direction)
         results.append(result)
         log_analysis(result, source="broadcast")
 

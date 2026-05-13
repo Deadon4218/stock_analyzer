@@ -35,6 +35,7 @@ def calculate_price_levels(
     data: StockData,
     chart_analyses: list[dict],
 ) -> PriceLevels:
+    direction = signal.direction if signal.direction in ("long", "short") else "long"
     entry = signal.entry_price
     tp = signal.take_profit
     sl = signal.stop_loss
@@ -53,37 +54,49 @@ def calculate_price_levels(
 
     # --- Stop Loss ---
     if sl is None and data.atr_14:
-        sl = round(entry - 1.5 * data.atr_14, 2)
+        sl = round(entry - 1.5 * data.atr_14, 2) if direction == "long" else round(entry + 1.5 * data.atr_14, 2)
         sources.append("SL=1.5×ATR")
 
-    # Try chart support levels as SL
+    # Try chart levels as SL.
     if sl is None:
         for chart in chart_analyses:
-            supports = chart.get("support_levels", [])
-            below_entry = [s for s in supports if s < entry]
-            if below_entry:
-                sl = round(max(below_entry), 2)
-                sources.append("SL=chart_support")
+            if direction == "long":
+                levels = [s for s in chart.get("support_levels", []) if s < entry]
+                level = max(levels) if levels else None
+                source = "SL=chart_support"
+            else:
+                levels = [r for r in chart.get("resistance_levels", []) if r > entry]
+                level = min(levels) if levels else None
+                source = "SL=chart_resistance"
+            if level is not None:
+                sl = round(level, 2)
+                sources.append(source)
                 break
 
     if sl is None:
-        sl = round(entry * 0.95, 2)
+        sl = round(entry * 0.95, 2) if direction == "long" else round(entry * 1.05, 2)
         sources.append("SL=5%_default")
 
     # --- Take Profit ---
     if tp is None:
-        # Try chart resistance levels
+        # Try chart target levels.
         for chart in chart_analyses:
-            resistances = chart.get("resistance_levels", [])
-            above_entry = [r for r in resistances if r > entry]
-            if above_entry:
-                tp = round(min(above_entry), 2)
-                sources.append("TP=chart_resistance")
+            if direction == "long":
+                levels = [r for r in chart.get("resistance_levels", []) if r > entry]
+                level = min(levels) if levels else None
+                source = "TP=chart_resistance"
+            else:
+                levels = [s for s in chart.get("support_levels", []) if s < entry]
+                level = max(levels) if levels else None
+                source = "TP=chart_support"
+            if level is not None:
+                tp = round(level, 2)
+                sources.append(source)
                 break
 
     if tp is None:
         risk = abs(entry - sl)
-        tp = round(entry + risk * MIN_RR, 2)
+        tp = round(entry + risk * MIN_RR, 2) if direction == "long" else round(entry - risk * MIN_RR, 2)
         sources.append(f"TP={MIN_RR:.0f}×risk")
 
     # --- R:R ---
@@ -103,6 +116,7 @@ def calculate_price_levels(
 @dataclass
 class AnalysisResult:
     ticker: str
+    direction: str
     bull_probability: float
     bear_probability: float
     should_enter: bool
@@ -136,6 +150,7 @@ class AnalysisResult:
             "=" * 60,
             f"📊 Analysis: {self.ticker}",
             "=" * 60,
+            f"Direction:          {self.direction.upper()}",
             f"🟢 Bull probability:  {self.bull_probability:.1%}",
             f"🔴 Bear probability:  {self.bear_probability:.1%}",
             f"📐 Ratio:             {self.probability_ratio():.2f}x",
@@ -157,7 +172,7 @@ class AnalysisResult:
 
         lines.append("")
         if self.should_enter:
-            lines.append("✅ ENTRY RECOMMENDED!")
+            lines.append(f"✅ {self.direction.upper()} ENTRY RECOMMENDED!")
         else:
             lines.append("❌ DO NOT ENTER — below 67% threshold")
 
@@ -191,6 +206,7 @@ def aggregate(
     bull_verdicts: list[AgentVerdict],
     bear_verdicts: list[AgentVerdict],
     price_levels: Optional[PriceLevels] = None,
+    direction: str = "long",
 ) -> AnalysisResult:
     # New contract: every agent (bull-leaning or bear-leaning specialty) returns
     # its own directional p_up. We average ALL of them — the bull/bear split is
@@ -219,7 +235,9 @@ def aggregate(
 
     # If too many agents failed, don't recommend ENTRY no matter what the math says.
     reliability = 1 - failed_count / total_count if total_count else 0
-    should_enter = bull_prob >= THRESHOLD and reliability >= 0.5
+    direction = direction if direction in ("long", "short") else "long"
+    trade_prob = bull_prob if direction == "long" else bear_prob
+    should_enter = trade_prob >= THRESHOLD and reliability >= 0.5
 
     # Pick the most "informative" verdict from each side: highest confidence,
     # tiebroken by how decisive p_up is (distance from 0.5).
@@ -231,6 +249,7 @@ def aggregate(
 
     return AnalysisResult(
         ticker=ticker,
+        direction=direction,
         bull_probability=bull_prob,
         bear_probability=bear_prob,
         should_enter=should_enter,

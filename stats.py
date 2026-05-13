@@ -5,8 +5,10 @@ Used by Telegram /stats commands and the dashboard.
 from collections import defaultdict
 from analyses_log import read_all
 
-# Threshold above which an agent's individual score is treated as "voted yes for their stance"
+# Legacy records used score as "strength for this agent's stance".
+# Current records use score/p_up as directional probability that a long trade succeeds.
 HIGH_SCORE = 0.6
+LOW_SCORE = 0.4
 # Threshold above which we say the overall verdict was ENTRY
 ENTRY_THRESHOLD = 0.67
 
@@ -14,6 +16,53 @@ ENTRY_THRESHOLD = 0.67
 def _is_resolved(record: dict) -> bool:
     """Has a definitive outcome (not still_open / no_data)."""
     return record.get("outcome") in ("tp_hit", "sl_hit", "expired")
+
+
+def _uses_directional_score(record: dict) -> bool:
+    """True for the current p_up contract where score means probability of upside."""
+    if record.get("score_contract") == "directional_p_up":
+        return True
+    agents = record.get("agents", [])
+    names = {a.get("name") for a in agents}
+    current_agent_names = {
+        "Momentum & Trend",
+        "Structure & Levels",
+        "Volume & Flow",
+        "Reversal & Overbought",
+        "Macro & Sector",
+        "Risk & Stop Distance",
+    }
+    return len(agents) == 6 or bool(names & current_agent_names)
+
+
+def _agent_prediction(record: dict, agent: dict) -> bool | None:
+    """
+    Return True for bullish/TP prediction, False for bearish/SL-or-expired, None for weak opinion.
+    Handles both the legacy stance-strength score and the current directional p_up score.
+    """
+    score = agent.get("score")
+    if score is None:
+        return None
+
+    if _uses_directional_score(record):
+        if score >= HIGH_SCORE:
+            return True
+        if score <= LOW_SCORE:
+            return False
+        return None
+
+    if score < HIGH_SCORE:
+        return None
+    return agent.get("stance") == "bull"
+
+
+def _actual_up_outcome(record: dict) -> bool:
+    """Whether the resolved outcome implies price moved up enough to win/lose."""
+    outcome = record.get("outcome")
+    direction = record.get("direction", "long")
+    if direction == "short":
+        return outcome == "sl_hit"
+    return outcome == "tp_hit"
 
 
 def overall_stats() -> dict:
@@ -50,18 +99,15 @@ def agent_accuracy() -> list[dict]:
     counts = defaultdict(lambda: [0, 0])
 
     for r in resolved:
-        outcome = r["outcome"]
-        # "Bullish" outcome = TP hit. "Bearish" outcome = SL hit or expired.
-        bullish_outcome = (outcome == "tp_hit")
+        # For current p_up records, correctness means predicting the resolved price direction.
+        bullish_outcome = _actual_up_outcome(r)
 
         for a in r.get("agents", []):
-            if a["score"] < HIGH_SCORE:
-                continue  # only count strong opinions
+            prediction = _agent_prediction(r, a)
+            if prediction is None:
+                continue
 
-            agent_correct = (
-                (a["stance"] == "bull" and bullish_outcome) or
-                (a["stance"] == "bear" and not bullish_outcome)
-            )
+            agent_correct = prediction == bullish_outcome
             counts[a["name"]][0] += 1 if agent_correct else 0
             counts[a["name"]][1] += 1
 
@@ -84,15 +130,13 @@ def strategy_accuracy() -> list[dict]:
     counts = defaultdict(lambda: [0, 0])
 
     for r in resolved:
-        bullish_outcome = (r["outcome"] == "tp_hit")
+        bullish_outcome = _actual_up_outcome(r)
         for a in r.get("agents", []):
-            if a["score"] < HIGH_SCORE:
+            prediction = _agent_prediction(r, a)
+            if prediction is None:
                 continue
             t = a.get("type", "unknown")
-            agent_correct = (
-                (a["stance"] == "bull" and bullish_outcome) or
-                (a["stance"] == "bear" and not bullish_outcome)
-            )
+            agent_correct = prediction == bullish_outcome
             counts[t][0] += 1 if agent_correct else 0
             counts[t][1] += 1
 

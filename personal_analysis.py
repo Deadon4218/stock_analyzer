@@ -25,7 +25,7 @@ def analyze_ticker(ticker: str, source: str = "personal") -> AnalysisResult | No
         signal, data, "", "No chart images available."
     )
 
-    result = aggregate(ticker, bull_verdicts, bear_verdicts, price_levels)
+    result = aggregate(ticker, bull_verdicts, bear_verdicts, price_levels, direction=signal.direction)
     log_analysis(result, source=source)
     return result
 
