@@ -59,6 +59,16 @@
         "label": "Risk Management",
         "desc": "Evaluates R:R, stop-loss placement vs ATR volatility, and target realism."
       }
+    },
+    {
+      "name": "Classic Technical",
+      "type": "classic_technical",
+      "prompt": "Deterministic non-AI rules engine using MA50/MA200, RSI, momentum, relative volume, 52-week context, chart patterns, R:R, and ATR stop quality.",
+      "stance": "bull",
+      "category": {
+        "label": "Classic Rules",
+        "desc": "Transparent non-AI scoring engine used as a quantitative anchor."
+      }
     }
   ],
   "strategies": {
@@ -85,6 +95,10 @@
     "risk_management": {
       "label": "Risk Management",
       "desc": "Evaluates R:R, stop-loss placement vs ATR volatility, and target realism."
+    },
+    "classic_technical": {
+      "label": "Classic Rules",
+      "desc": "Transparent non-AI scoring engine used as a quantitative anchor."
     }
   }
 }

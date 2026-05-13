@@ -12,6 +12,8 @@ from stock_data import fetch_stock_data
 from image_analyzer import analyze_all_images, format_chart_analysis
 from agents import run_all_agents
 from aggregator import aggregate, calculate_price_levels
+from classic_agent import run_classic_agent
+from features import extract_features
 from state_store import get_analyzed_keys, add_analyzed_keys
 from user_store import get_all_users
 from telegram_bot import broadcast, format_broadcast_report
@@ -83,11 +85,23 @@ def main():
             print(f"   ⚠️  {data.error}")
 
         price_levels = calculate_price_levels(signal, data, chart_analyses)
+        features = extract_features(signal, data, price_levels, chart_analyses)
+        classic_verdict = run_classic_agent(signal, data, price_levels, chart_analyses, features)
+        print(f"   📏 Classic Technical: p_up={classic_verdict.p_up:.2f} conf={classic_verdict.confidence:.2f}")
+
         related = search_messages_for_ticker(messages, signal.ticker)
         msg_ctx = "\n".join(f"[{m['author']}]: {m['content']}" for m in related[-15:])
 
         bull, bear = run_all_agents(signal, data, msg_ctx, chart_context)
-        result = aggregate(signal.ticker, bull, bear, price_levels, direction=signal.direction)
+        bull.append(classic_verdict)
+        result = aggregate(
+            signal.ticker,
+            bull,
+            bear,
+            price_levels,
+            direction=signal.direction,
+            features=features,
+        )
         results.append(result)
         log_analysis(result, source="broadcast")
 

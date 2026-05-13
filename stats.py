@@ -31,8 +31,9 @@ def _uses_directional_score(record: dict) -> bool:
         "Reversal & Overbought",
         "Macro & Sector",
         "Risk & Stop Distance",
+        "Classic Technical",
     }
-    return len(agents) == 6 or bool(names & current_agent_names)
+    return len(agents) in (6, 7) or bool(names & current_agent_names)
 
 
 def _agent_prediction(record: dict, agent: dict) -> bool | None:

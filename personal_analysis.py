@@ -9,6 +9,8 @@ from stock_data import fetch_stock_data
 from agents import run_all_agents
 from aggregator import aggregate, calculate_price_levels, AnalysisResult
 from analyses_log import log_analysis
+from classic_agent import run_classic_agent
+from features import extract_features
 
 
 def analyze_ticker(ticker: str, source: str = "personal") -> AnalysisResult | None:
@@ -20,12 +22,22 @@ def analyze_ticker(ticker: str, source: str = "personal") -> AnalysisResult | No
         return None
 
     price_levels = calculate_price_levels(signal, data, [])
+    features = extract_features(signal, data, price_levels, [])
+    classic_verdict = run_classic_agent(signal, data, price_levels, [], features)
 
     bull_verdicts, bear_verdicts = run_all_agents(
         signal, data, "", "No chart images available."
     )
+    bull_verdicts.append(classic_verdict)
 
-    result = aggregate(ticker, bull_verdicts, bear_verdicts, price_levels, direction=signal.direction)
+    result = aggregate(
+        ticker,
+        bull_verdicts,
+        bear_verdicts,
+        price_levels,
+        direction=signal.direction,
+        features=features,
+    )
     log_analysis(result, source=source)
     return result
 

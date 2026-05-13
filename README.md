@@ -1,6 +1,6 @@
 # Stock Signal Analyzer
 
-Automated Discord signal analyzer + personal watchlist tracker. 6 AI evidence lenses (3 bullish, 3 bearish/risk-focused) estimate directional upside probability (`p_up`) and decide whether each setup passes a 67% entry threshold. Sends results via Telegram.
+Automated Discord signal analyzer + personal watchlist tracker. 6 AI evidence lenses plus 1 deterministic classic technical agent estimate directional upside probability (`p_up`) and decide whether each setup passes a 67% entry threshold. Sends results via Telegram.
 
 ## How it works
 
@@ -80,6 +80,9 @@ python webhook_handler.py   # process pending Telegram commands
 | `run_personal.py` | Per-user watchlist analysis |
 | `webhook_handler.py` | Telegram command poller |
 | `agents.py` | 6 p_up evidence lenses |
+| `classic_agent.py` | Non-AI technical rules agent |
+| `features.py` | Extracts structured trading features for logs/backtests |
+| `adaptive_weights.py` | Computes conservative outcome-based agent weights |
 | `aggregator.py` | Combines p_up verdicts → entry decision |
 | `signal_parser.py` | LLM signal extraction (Hebrew → JSON) |
 | `discord_reader.py` | Discord API client |
@@ -95,6 +98,6 @@ python webhook_handler.py   # process pending Telegram commands
 
 ## Notes
 
-- The 6 agent prompts are shared across all users — when you change prompts in `agents.py`, all users get the new version
+- The 6 AI prompts and 1 classic rules agent are shared across all users
 - Each user has their own private watchlist
 - Groq free tier is rate-limited (~12k TPM) — `PERSONAL_DELAY_SECONDS` spaces out calls

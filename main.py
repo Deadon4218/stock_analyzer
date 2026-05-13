@@ -2,7 +2,7 @@
 Stock Signal Analyzer v2
 ========================
 Reads signals from Discord (Hebrew text + TradingView charts),
-analyzes with 6 AI evidence lenses (3 bull, 3 bear/risk),
+analyzes with 6 AI evidence lenses plus 1 classic rules agent,
 and gives buy/skip decision based on 67% threshold.
 
 Setup:
@@ -22,6 +22,8 @@ from stock_data import fetch_stock_data
 from image_analyzer import analyze_all_images, format_chart_analysis
 from agents import run_all_agents
 from aggregator import aggregate, calculate_price_levels
+from classic_agent import run_classic_agent
+from features import extract_features
 
 # Deduplication — tracks analyzed signal keys (ticker:timestamp)
 _analyzed_keys: set[str] = set()
@@ -41,7 +43,7 @@ def run_cycle():
     Single analysis cycle:
     1. Fetch messages from Discord
     2. Extract signals with LLM (handles Hebrew)
-    3. For each signal: analyze charts + fetch market data + run 6 agents
+    3. For each signal: analyze charts + fetch market data + run 6 AI agents + classic rules
     4. Print verdict
     """
     channel_id = os.environ["DISCORD_CHANNEL_ID"]
@@ -124,6 +126,9 @@ def run_cycle():
         # 3c: Calculate price levels
         price_levels = calculate_price_levels(signal, data, chart_analyses)
         print(f"   💰 {price_levels}")
+        features = extract_features(signal, data, price_levels, chart_analyses)
+        classic_verdict = run_classic_agent(signal, data, price_levels, chart_analyses, features)
+        print(f"   📏 Classic Technical: p_up={classic_verdict.p_up:.2f} conf={classic_verdict.confidence:.2f}")
 
         # 3d: Related Discord messages
         related_messages = search_messages_for_ticker(messages, signal.ticker)
@@ -136,9 +141,17 @@ def run_cycle():
         bull_verdicts, bear_verdicts = run_all_agents(
             signal, data, messages_context, chart_context
         )
+        bull_verdicts.append(classic_verdict)
 
         # 3f: Aggregate
-        result = aggregate(signal.ticker, bull_verdicts, bear_verdicts, price_levels, direction=signal.direction)
+        result = aggregate(
+            signal.ticker,
+            bull_verdicts,
+            bear_verdicts,
+            price_levels,
+            direction=signal.direction,
+            features=features,
+        )
         results.append(result)
 
         # Print report
@@ -176,7 +189,7 @@ def main():
 
     print("🚀 Stock Signal Analyzer v2 started")
     print(f"   Polling: every {os.environ.get('POLL_MIN_MINUTES', 5)}–{os.environ.get('POLL_MAX_MINUTES', 15)} min (random)")
-    print(f"   Features: Hebrew text parsing, TradingView chart analysis, 6 AI evidence lenses")
+    print(f"   Features: Hebrew text parsing, TradingView chart analysis, 6 AI lenses + classic rules")
     print("   Press Ctrl+C to stop\n")
 
     while True:

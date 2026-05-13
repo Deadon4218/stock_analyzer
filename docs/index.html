@@ -116,7 +116,7 @@
 <body>
 
 <h1>📊 Stock Analyzer Dashboard</h1>
-<p class="subtitle">6 AI evidence lenses, directional p_up scoring, 67% threshold for entry. <a href="https://github.com/Deadon4218/stock_analyzer" target="_blank">View source</a></p>
+<p class="subtitle">6 AI evidence lenses + 1 classic rules engine, directional p_up scoring, 67% threshold for entry. <a href="https://github.com/Deadon4218/stock_analyzer" target="_blank">View source</a></p>
 
 <h2>Live Stats</h2>
 <div class="grid" id="kpis"></div>
@@ -124,7 +124,7 @@
 <h2>Strategy Types</h2>
 <div class="agent-grid" id="strategies"></div>
 
-<h2>The 6 Agents</h2>
+<h2>The 7 Evidence Lenses</h2>
 <div class="agent-grid" id="agentRoster"></div>
 
 <h2>Per-Agent Activity (avg p_up &amp; confidence)</h2>
@@ -184,6 +184,7 @@ function computeKpis(records) {
     entries: entries.length,
     wins: wins.length,
     winRate: entries.length ? wins.length / entries.length : null,
+    classic: records.filter(r => typeof r.classic_p_up === "number").length,
   };
 }
 
@@ -195,6 +196,7 @@ function renderKpis(k) {
     { label: "ENTRY signals", value: k.entries },
     { label: "Wins (TP hit)", value: k.wins },
     { label: "Win Rate", value: k.winRate === null ? "—" : (k.winRate * 100).toFixed(1) + "%" },
+    { label: "Classic Scored", value: k.classic },
   ];
   document.getElementById("kpis").innerHTML = cards.map(c =>
     `<div class="card"><div class="label">${c.label}</div><div class="value">${c.value}</div></div>`
@@ -319,9 +321,10 @@ function usesDirectionalScore(record) {
     "Reversal & Overbought",
     "Macro & Sector",
     "Risk & Stop Distance",
+    "Classic Technical",
   ]);
   const agents = record.agents || [];
-  return agents.length === 6 || agents.some(a => currentNames.has(a.name));
+  return agents.length === 6 || agents.length === 7 || agents.some(a => currentNames.has(a.name));
 }
 
 function agentPrediction(record, agent) {
@@ -387,7 +390,7 @@ function renderRecent(records) {
       <thead>
         <tr>
           <th>Date</th><th>Ticker</th><th>Dir</th><th>Verdict</th>
-          <th class="num">Bull%</th><th class="num">Bear%</th>
+          <th class="num">Bull%</th><th class="num">Bear%</th><th class="num">Classic</th>
           <th class="num">Entry</th><th class="num">TP</th><th class="num">SL</th>
           <th>Outcome</th><th>Source</th>
         </tr>
@@ -401,6 +404,7 @@ function renderRecent(records) {
             <td class="verdict-${r.verdict.toLowerCase()}">${r.verdict}</td>
             <td class="num">${(r.bull_prob * 100).toFixed(0)}%</td>
             <td class="num">${(r.bear_prob * 100).toFixed(0)}%</td>
+            <td class="num">${typeof r.classic_p_up === "number" ? (r.classic_p_up * 100).toFixed(0) + "%" : "—"}</td>
             <td class="num">${r.entry ? "$" + r.entry.toFixed(2) : "—"}</td>
             <td class="num">${r.take_profit ? "$" + r.take_profit.toFixed(2) : "—"}</td>
             <td class="num">${r.stop_loss ? "$" + r.stop_loss.toFixed(2) : "—"}</td>

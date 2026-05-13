@@ -3,6 +3,8 @@ from unittest.mock import patch
 
 from agents import AgentVerdict
 from aggregator import aggregate, calculate_price_levels
+from classic_agent import run_classic_agent
+from features import extract_features
 from signal_parser import StockSignal
 from stock_data import StockData
 from stats import agent_accuracy
@@ -85,6 +87,39 @@ class CoreLogicTest(unittest.TestCase):
             rows = {row["agent"]: row for row in agent_accuracy()}
         self.assertEqual(rows["Bearish read"]["accuracy"], 1.0)
         self.assertEqual(rows["Bullish read"]["accuracy"], 0.0)
+
+    def test_low_rr_blocks_entry_even_with_high_probability(self):
+        signal = StockSignal(ticker="TEST", entry_price=100, take_profit=104, stop_loss=96)
+        levels = calculate_price_levels(signal, stock_data(price=100, atr=2), [])
+        result = aggregate(
+            "TEST",
+            [verdict("bull", "bull", 0.9)],
+            [verdict("bear", "bear", 0.85)],
+            levels,
+            direction="long",
+            agent_weights={},
+        )
+        self.assertFalse(result.should_enter)
+        self.assertIn("R:R", result.entry_block_reasons[0])
+
+    def test_features_capture_trade_quality(self):
+        signal = StockSignal(ticker="TEST", direction="long")
+        levels = calculate_price_levels(signal, stock_data(price=100, atr=4), [])
+        features = extract_features(signal, stock_data(price=100, atr=4), levels, [])
+        self.assertEqual(features["rr_ratio"], 2.0)
+        self.assertEqual(features["risk_atr_ratio"], 1.5)
+        self.assertIn("change_20d_pct", features)
+
+    def test_classic_agent_returns_directional_p_up(self):
+        signal = StockSignal(ticker="TEST", direction="long")
+        data = stock_data(price=100, atr=4)
+        levels = calculate_price_levels(signal, data, [])
+        features = extract_features(signal, data, levels, [])
+        classic = run_classic_agent(signal, data, levels, [], features)
+        self.assertEqual(classic.agent_name, "Classic Technical")
+        self.assertEqual(classic.agent_type, "classic_technical")
+        self.assertGreater(classic.p_up, 0.5)
+        self.assertGreater(classic.confidence, 0.5)
 
 
 if __name__ == "__main__":

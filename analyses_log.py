@@ -20,6 +20,7 @@ def _agent_to_dict(v) -> dict:
         "score": round(v.score, 3),
         "confidence": round(v.confidence, 3),
         "reasoning": v.reasoning[:400],
+        "key_points": v.key_points[:6],
     }
 
 
@@ -48,8 +49,17 @@ def log_analysis(result, source: str):
         "bear_prob": round(result.bear_probability, 4),
         "ratio": round(result.probability_ratio(), 3) if result.bear_probability > 0 else None,
         "agents": [_agent_to_dict(v) for v in result.bull_verdicts + result.bear_verdicts],
+        "features": result.features,
+        "agent_weights": result.agent_weights,
+        "entry_block_reasons": result.entry_block_reasons,
         "outcome": None,
     }
+
+    for agent in result.bull_verdicts + result.bear_verdicts:
+        if agent.agent_type == "classic_technical":
+            record["classic_p_up"] = round(agent.p_up, 4)
+            record["classic_confidence"] = round(agent.confidence, 4)
+            break
 
     if result.price_levels:
         pl = result.price_levels

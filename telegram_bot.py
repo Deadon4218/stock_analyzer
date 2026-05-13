@@ -94,6 +94,8 @@ def format_broadcast_report(results) -> str:
 
         if r.should_enter:
             line += f"\n   📌 <i>{_esc(r.top_bull_reason[:200])}</i>"
+        for reason in getattr(r, "entry_block_reasons", []):
+            line += f"\n   ⛔ <i>{_esc(reason)}</i>"
 
         line += _reliability_warning(r)
         lines.append(line)
@@ -118,6 +120,9 @@ def format_personal_report(ticker: str, result) -> str:
     warning = _reliability_warning(result)
     if warning:
         lines.append(warning.lstrip("\n   "))
+
+    for reason in getattr(result, "entry_block_reasons", []):
+        lines.append(f"⛔ <i>{_esc(reason)}</i>")
 
     if result.should_enter:
         lines.append(f"\n💡 <i>{_esc(result.top_bull_reason[:250])}</i>")
@@ -150,6 +155,8 @@ def format_personal_summary(user_results: list[tuple[str, object]]) -> str:
 
         reason = result.top_bull_reason if result.should_enter else result.top_bear_reason
         line += f"\n   <i>{_esc(reason[:180])}</i>"
+        for block_reason in getattr(result, "entry_block_reasons", []):
+            line += f"\n   ⛔ <i>{_esc(block_reason)}</i>"
         line += _reliability_warning(result)
         lines.append(line)
 

@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from typing import Optional
 from agents import AgentVerdict
 from signal_parser import StockSignal
@@ -7,6 +8,7 @@ from stock_data import StockData
 
 THRESHOLD = 0.67
 MIN_RR = 2.0
+MIN_ENTRY_RR = float(os.environ.get("MIN_ENTRY_RR", 1.5))
 
 
 @dataclass
@@ -127,6 +129,9 @@ class AnalysisResult:
     price_levels: Optional[PriceLevels] = None
     failed_count: int = 0
     total_count: int = 10
+    features: dict = field(default_factory=dict)
+    agent_weights: dict[str, float] = field(default_factory=dict)
+    entry_block_reasons: list[str] = field(default_factory=list)
 
     def reliability(self) -> float:
         """Fraction of agents that produced real verdicts (0.0–1.0)."""
@@ -175,9 +180,11 @@ class AnalysisResult:
             lines.append(f"✅ {self.direction.upper()} ENTRY RECOMMENDED!")
         else:
             lines.append("❌ DO NOT ENTER — below 67% threshold")
+        for reason in self.entry_block_reasons:
+            lines.append(f"   Blocked: {reason}")
 
         lines.append("")
-        lines.append("── Bull Agents ──")
+        lines.append("── Upside / Classic Lenses ──")
 
         for v in sorted(self.bull_verdicts, key=lambda x: x.score, reverse=True):
             lines.append(f"  🟢 {v.agent_name} [{v.score:.2f}]: {v.reasoning}")
@@ -185,7 +192,7 @@ class AnalysisResult:
                 lines.append(f"     • {pt}")
 
         lines.append("")
-        lines.append("── Bear Agents ──")
+        lines.append("── Risk / Downside Lenses ──")
 
         for v in sorted(self.bear_verdicts, key=lambda x: x.score, reverse=True):
             lines.append(f"  🔴 {v.agent_name} [{v.score:.2f}]: {v.reasoning}")
@@ -207,6 +214,8 @@ def aggregate(
     bear_verdicts: list[AgentVerdict],
     price_levels: Optional[PriceLevels] = None,
     direction: str = "long",
+    features: Optional[dict] = None,
+    agent_weights: Optional[dict[str, float]] = None,
 ) -> AnalysisResult:
     # New contract: every agent (bull-leaning or bear-leaning specialty) returns
     # its own directional p_up. We average ALL of them — the bull/bear split is
@@ -218,14 +227,20 @@ def aggregate(
 
     failed_count = (len(bull_verdicts) - len(real_bulls)) + (len(bear_verdicts) - len(real_bears))
     total_count = len(bull_verdicts) + len(bear_verdicts)
+    if agent_weights is None:
+        try:
+            from adaptive_weights import get_agent_weights
+            agent_weights = get_agent_weights()
+        except Exception:
+            agent_weights = {}
 
     if real_all:
-        total_weight = sum(v.confidence for v in real_all)
+        total_weight = sum(v.confidence * agent_weights.get(v.agent_name, 1.0) for v in real_all)
         if total_weight == 0:
             bull_prob = 0.5
         else:
             bull_prob = round(
-                sum(v.p_up * v.confidence for v in real_all) / total_weight,
+                sum(v.p_up * v.confidence * agent_weights.get(v.agent_name, 1.0) for v in real_all) / total_weight,
                 4,
             )
     else:
@@ -237,15 +252,19 @@ def aggregate(
     reliability = 1 - failed_count / total_count if total_count else 0
     direction = direction if direction in ("long", "short") else "long"
     trade_prob = bull_prob if direction == "long" else bear_prob
-    should_enter = trade_prob >= THRESHOLD and reliability >= 0.5
+    entry_block_reasons = []
+    if price_levels and price_levels.rr_ratio is not None and price_levels.rr_ratio < MIN_ENTRY_RR:
+        entry_block_reasons.append(f"R:R {price_levels.rr_ratio:.2f} is below {MIN_ENTRY_RR:.2f}")
+    should_enter = trade_prob >= THRESHOLD and reliability >= 0.5 and not entry_block_reasons
 
     # Pick the most "informative" verdict from each side: highest confidence,
     # tiebroken by how decisive p_up is (distance from 0.5).
     def informativeness(v: AgentVerdict) -> float:
         return v.confidence * abs(v.p_up - 0.5)
 
-    top_bull = max(real_bulls or bull_verdicts, key=informativeness)
-    top_bear = max(real_bears or bear_verdicts, key=informativeness)
+    fallback_verdicts = real_all or bull_verdicts or bear_verdicts
+    top_bull = max(real_bulls or bull_verdicts or fallback_verdicts, key=informativeness)
+    top_bear = max(real_bears or bear_verdicts or fallback_verdicts, key=informativeness)
 
     return AnalysisResult(
         ticker=ticker,
@@ -260,4 +279,7 @@ def aggregate(
         price_levels=price_levels,
         failed_count=failed_count,
         total_count=total_count,
+        features=features or {},
+        agent_weights=agent_weights,
+        entry_block_reasons=entry_block_reasons,
     )
