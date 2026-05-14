@@ -32,8 +32,6 @@ WELCOME_TEXT = (
     "/agent_stats — Per-agent accuracy\n"
     "/strategy_stats — Accuracy by strategy type\n"
     "/history AAPL — Past calls on a ticker\n\n"
-    "⏱ <i>Commands are processed from the queue every 1 minute, "
-    "so replies may take up to ~60s.</i>\n\n"
     "You'll automatically receive:\n"
     "• Discord signals as they come in (shared, every 15 min)\n"
     "• Personal watchlist report 2x/day"
