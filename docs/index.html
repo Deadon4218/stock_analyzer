@@ -21,6 +21,37 @@
   .subtitle { color: #8b949e; margin: 0 0 24px; }
   h2 { margin-top: 36px; font-size: 20px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
   h3 { margin: 0 0 8px; font-size: 16px; }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 24px;
+    flex-wrap: wrap;
+  }
+  .segmented {
+    display: inline-flex;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #161b22;
+  }
+  .segmented button {
+    min-width: 88px;
+    height: 36px;
+    border: 0;
+    border-right: 1px solid #30363d;
+    background: transparent;
+    color: #8b949e;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .segmented button:last-child { border-right: 0; }
+  .segmented button.active {
+    background: #1f6feb;
+    color: #fff;
+    font-weight: 600;
+  }
 
   .grid {
     display: grid;
@@ -35,6 +66,7 @@
   }
   .card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.4px; }
   .card .value { font-size: 26px; font-weight: 600; color: #58a6ff; margin-top: 4px; }
+  .card .detail { color: #8b949e; font-size: 12px; margin-top: 2px; }
 
   .agent-grid {
     display: grid;
@@ -84,6 +116,8 @@
 
   .verdict-entry { color: #3fb950; font-weight: 600; }
   .verdict-skip { color: #f85149; }
+  .mode-signal { color: #58a6ff; font-weight: 600; }
+  .mode-scan { color: #d29922; font-weight: 600; }
   .outcome-tp { color: #3fb950; }
   .outcome-sl { color: #f85149; }
   .outcome-open { color: #d29922; }
@@ -117,9 +151,22 @@
 
 <h1>📊 Stock Analyzer Dashboard</h1>
 <p class="subtitle">6 AI evidence lenses + 1 classic rules engine, directional p_up scoring, 67% threshold for entry. <a href="https://github.com/Deadon4218/stock_analyzer" target="_blank">View source</a></p>
+<div class="toolbar">
+  <div class="segmented" id="modeTabs">
+    <button type="button" data-mode="signal" class="active">SIGNAL</button>
+    <button type="button" data-mode="scan">SCAN</button>
+    <button type="button" data-mode="all">ALL</button>
+  </div>
+</div>
 
 <h2>Live Stats</h2>
 <div class="grid" id="kpis"></div>
+
+<h2>Blocked Reasons</h2>
+<div id="blockedContainer"></div>
+
+<h2>Classic vs Final</h2>
+<div id="classicContainer"></div>
 
 <h2>Strategy Types</h2>
 <div class="agent-grid" id="strategies"></div>
@@ -150,6 +197,9 @@ const ANALYSES_URL = `https://raw.githubusercontent.com/${REPO}/main/data/analys
 const AGENTS_URL = `https://raw.githubusercontent.com/${REPO}/main/data/agents.json`;
 const HIGH_SCORE = 0.6;
 const LOW_SCORE = 0.4;
+let allRecords = [];
+let allAgentsData = { agents: [], strategies: {} };
+let activeMode = "signal";
 
 async function fetchText(url) {
   const r = await fetch(url + "?t=" + Date.now());
@@ -173,17 +223,36 @@ async function loadAgents() {
 
 function isResolved(r) { return ["tp_hit", "sl_hit", "expired"].includes(r.outcome); }
 
+function recordMode(r) {
+  if (r.analysis_mode) return r.analysis_mode;
+  if (r.source === "personal" || r.source === "manual") return "scan";
+  return "signal";
+}
+
+function visibleRecords() {
+  if (activeMode === "all") return allRecords;
+  return allRecords.filter(r => recordMode(r) === activeMode);
+}
+
+function formatRate(wins, total) {
+  if (!total) return { value: "—", detail: "0/0" };
+  return { value: (wins / total * 100).toFixed(1) + "%", detail: `${wins}/${total}` };
+}
+
 function computeKpis(records) {
   const resolved = records.filter(isResolved);
   const entries = resolved.filter(r => r.verdict === "ENTRY");
   const wins = entries.filter(r => r.outcome === "tp_hit");
+  const winRate = formatRate(wins.length, entries.length);
+  const blocked = records.filter(r => (r.entry_block_reasons || []).length).length;
   return {
     total: records.length,
     resolved: resolved.length,
     open: records.filter(r => !isResolved(r)).length,
     entries: entries.length,
     wins: wins.length,
-    winRate: entries.length ? wins.length / entries.length : null,
+    winRate,
+    blocked,
     classic: records.filter(r => typeof r.classic_p_up === "number").length,
   };
 }
@@ -193,13 +262,14 @@ function renderKpis(k) {
     { label: "Total Analyses", value: k.total },
     { label: "Resolved", value: k.resolved },
     { label: "Pending", value: k.open },
-    { label: "ENTRY signals", value: k.entries },
-    { label: "Wins (TP hit)", value: k.wins },
-    { label: "Win Rate", value: k.winRate === null ? "—" : (k.winRate * 100).toFixed(1) + "%" },
+    { label: "ENTRY", value: k.entries },
+    { label: "Wins", value: k.wins },
+    { label: "Win Rate", value: k.winRate.value, detail: k.winRate.detail },
+    { label: "Blocked", value: k.blocked },
     { label: "Classic Scored", value: k.classic },
   ];
   document.getElementById("kpis").innerHTML = cards.map(c =>
-    `<div class="card"><div class="label">${c.label}</div><div class="value">${c.value}</div></div>`
+    `<div class="card"><div class="label">${c.label}</div><div class="value">${c.value}</div>${c.detail ? `<div class="detail">${c.detail}</div>` : ""}</div>`
   ).join("");
 }
 
@@ -263,10 +333,12 @@ function renderAgentScoresChart(perAgent) {
   const wrap = document.getElementById("agentScoresWrap");
   const names = Object.keys(perAgent);
   if (!names.length) {
-    wrap.outerHTML = `<div class="empty">No agent data yet — wait for the first broadcast or personal run.</div>`;
+    wrap.innerHTML = `<div class="empty">No agent data for this view.</div>`;
     return;
   }
+  wrap.innerHTML = `<canvas id="agentScoresChart"></canvas>`;
   const ctx = document.getElementById("agentScoresChart").getContext("2d");
+  Chart.getChart("agentScoresChart")?.destroy();
   new Chart(ctx, {
     type: "bar",
     data: {
@@ -369,6 +441,76 @@ function renderAccuracyChart(containerId, rows, emptyText) {
   });
 }
 
+function blockedRows(records) {
+  const counts = {};
+  for (const r of records) {
+    for (const reason of r.entry_block_reasons || []) {
+      counts[reason] = (counts[reason] || 0) + 1;
+    }
+  }
+  return Object.entries(counts)
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function renderBlockedReasons(records) {
+  const rows = blockedRows(records);
+  const c = document.getElementById("blockedContainer");
+  if (!rows.length) {
+    c.innerHTML = `<div class="empty">No blocked setups in this view.</div>`;
+    return;
+  }
+  c.innerHTML = `
+    <table>
+      <thead><tr><th>Reason</th><th class="num">Count</th></tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr><td>${r.reason}</td><td class="num">${r.count}</td></tr>`).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderClassicComparison(records) {
+  const c = document.getElementById("classicContainer");
+  const rows = records
+    .filter(r => typeof r.classic_p_up === "number")
+    .slice(-20)
+    .reverse();
+  if (!rows.length) {
+    c.innerHTML = `<div class="empty">Classic scores will appear after the next analyzed setup.</div>`;
+    return;
+  }
+  c.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th><th>Ticker</th><th>Mode</th><th>Verdict</th>
+          <th class="num">Final</th><th class="num">Classic</th><th class="num">Delta</th><th>Outcome</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => {
+          const final = r.bull_prob;
+          const classic = r.classic_p_up;
+          const delta = final - classic;
+          return `
+            <tr>
+              <td>${r.ts.slice(0, 16).replace("T", " ")}</td>
+              <td><strong>${r.ticker}</strong></td>
+              <td class="mode-${recordMode(r)}">${recordMode(r).toUpperCase()}</td>
+              <td class="verdict-${r.verdict.toLowerCase()}">${r.verdict}</td>
+              <td class="num">${(final * 100).toFixed(0)}%</td>
+              <td class="num">${(classic * 100).toFixed(0)}%</td>
+              <td class="num">${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(0)}%</td>
+              <td>${outcomeBadge(r.outcome)}</td>
+            </tr>
+          `;
+        }).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function outcomeBadge(o) {
   return {
     tp_hit: '<span class="outcome-tp">🟢 TP hit</span>',
@@ -400,7 +542,7 @@ function renderRecent(records) {
           <tr>
             <td>${r.ts.slice(0, 16).replace("T", " ")}</td>
             <td><strong>${r.ticker}</strong></td>
-            <td>${(r.analysis_mode || "signal").toUpperCase()}</td>
+            <td class="mode-${recordMode(r)}">${recordMode(r).toUpperCase()}</td>
             <td>${(r.direction || "long").toUpperCase()}</td>
             <td class="verdict-${r.verdict.toLowerCase()}">${r.verdict}</td>
             <td class="num">${(r.bull_prob * 100).toFixed(0)}%</td>
@@ -418,12 +560,14 @@ function renderRecent(records) {
   `;
 }
 
-(async () => {
-  const [records, agentsData] = await Promise.all([loadAnalyses(), loadAgents()]);
+function renderDashboard() {
+  const records = visibleRecords();
   renderKpis(computeKpis(records));
-  renderStrategies(agentsData.strategies || {}, agentsData.agents || []);
+  renderBlockedReasons(records);
+  renderClassicComparison(records);
+  renderStrategies(allAgentsData.strategies || {}, allAgentsData.agents || []);
   const perAgent = perAgentStats(records);
-  renderAgentRoster(agentsData.agents || [], perAgent);
+  renderAgentRoster(allAgentsData.agents || [], perAgent);
   renderAgentScoresChart(perAgent);
   renderAccuracyChart(
     "strategyChartContainer",
@@ -436,6 +580,24 @@ function renderRecent(records) {
     "Need resolved outcomes to compute per-agent accuracy."
   );
   renderRecent(records);
+}
+
+function setupModeTabs() {
+  document.querySelectorAll("#modeTabs button").forEach(button => {
+    button.addEventListener("click", () => {
+      activeMode = button.dataset.mode;
+      document.querySelectorAll("#modeTabs button").forEach(b => b.classList.toggle("active", b === button));
+      renderDashboard();
+    });
+  });
+}
+
+(async () => {
+  const [records, agentsData] = await Promise.all([loadAnalyses(), loadAgents()]);
+  allRecords = records;
+  allAgentsData = agentsData;
+  setupModeTabs();
+  renderDashboard();
 })();
 </script>
 </body>
