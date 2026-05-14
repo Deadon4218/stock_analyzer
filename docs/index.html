@@ -21,6 +21,26 @@
   .subtitle { color: #8b949e; margin: 0 0 24px; }
   h2 { margin-top: 36px; font-size: 20px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
   h3 { margin: 0 0 8px; font-size: 16px; }
+  .section-note { color: #8b949e; font-size: 13px; margin: -4px 0 12px; }
+  .guide-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin: 0 0 26px;
+  }
+  .guide-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .guide-card strong {
+    display: block;
+    color: #c9d1d9;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+  .guide-card span { color: #8b949e; font-size: 13px; }
   .toolbar {
     display: flex;
     align-items: center;
@@ -118,6 +138,9 @@
   .verdict-skip { color: #f85149; }
   .mode-signal { color: #58a6ff; font-weight: 600; }
   .mode-scan { color: #d29922; font-weight: 600; }
+  .state-good { color: #3fb950; font-weight: 600; }
+  .state-bad { color: #f85149; font-weight: 600; }
+  .state-muted { color: #8b949e; }
   .outcome-tp { color: #3fb950; }
   .outcome-sl { color: #f85149; }
   .outcome-open { color: #d29922; }
@@ -151,6 +174,14 @@
 
 <h1>📊 Stock Analyzer Dashboard</h1>
 <p class="subtitle">6 AI evidence lenses + 1 classic rules engine, directional p_up scoring, 67% threshold for entry. <a href="https://github.com/Deadon4218/stock_analyzer" target="_blank">View source</a></p>
+
+<div class="guide-grid">
+  <div class="guide-card"><strong>SIGNAL</strong><span>Trade setups parsed from Discord. Use this as the main performance view.</span></div>
+  <div class="guide-card"><strong>SCAN</strong><span>Watchlist checks. These are market reads, not entry recommendations.</span></div>
+  <div class="guide-card"><strong>Classic vs Final</strong><span>Compares the deterministic rules engine with the final combined probability.</span></div>
+  <div class="guide-card"><strong>Blocked</strong><span>Shows setups rejected by safety rules such as stale entry or low R:R.</span></div>
+</div>
+
 <div class="toolbar">
   <div class="segmented" id="modeTabs">
     <button type="button" data-mode="signal" class="active">SIGNAL</button>
@@ -159,32 +190,39 @@
   </div>
 </div>
 
-<h2>Live Stats</h2>
+<h2>1. Performance Overview</h2>
+<p class="section-note">Numbers in this section follow the selected view above. Win rate is shown with its sample size.</p>
 <div class="grid" id="kpis"></div>
 
-<h2>Blocked Reasons</h2>
+<h2>2. Blocked Reasons</h2>
+<p class="section-note">Rejected setups are often more useful than entries: this shows which safety rule stopped them.</p>
 <div id="blockedContainer"></div>
 
-<h2>Classic vs Final</h2>
+<h2>3. Classic vs Final</h2>
+<p class="section-note">Final is the combined probability. Classic is the non-AI rules engine. Large gaps deserve review.</p>
 <div id="classicContainer"></div>
 
-<h2>Strategy Types</h2>
-<div class="agent-grid" id="strategies"></div>
+<h2>4. Recent Analyses</h2>
+<p class="section-note">The latest records in the selected view, including mode, direction, probabilities, levels, and outcome.</p>
+<div id="recentContainer"></div>
 
-<h2>The 7 Evidence Lenses</h2>
-<div class="agent-grid" id="agentRoster"></div>
-
-<h2>Per-Agent Activity (avg p_up &amp; confidence)</h2>
-<div class="chart-wrap" id="agentScoresWrap"><canvas id="agentScoresChart"></canvas></div>
-
-<h2>Strategy Accuracy</h2>
+<h2>5. Accuracy By Strategy</h2>
+<p class="section-note">Resolved outcomes only. Treat small sample sizes as weak evidence.</p>
 <div id="strategyChartContainer"></div>
 
-<h2>Per-Agent Accuracy (resolved outcomes only)</h2>
+<h2>6. Accuracy By Lens</h2>
+<p class="section-note">Resolved outcomes only. This helps identify which lens is adding useful signal.</p>
 <div id="agentChartContainer"></div>
 
-<h2>Recent Analyses</h2>
-<div id="recentContainer"></div>
+<h2>7. Lens Activity</h2>
+<p class="section-note">Average p_up shows bias. Accuracy above is the better measure of quality.</p>
+<div class="chart-wrap" id="agentScoresWrap"><canvas id="agentScoresChart"></canvas></div>
+
+<h2>8. Strategy Types</h2>
+<div class="agent-grid" id="strategies"></div>
+
+<h2>9. Evidence Lens Roster</h2>
+<div class="agent-grid" id="agentRoster"></div>
 
 <p class="footer">
   Data: <a href="https://github.com/Deadon4218/stock_analyzer/blob/main/data/analyses.jsonl" target="_blank">analyses.jsonl</a>
@@ -453,6 +491,14 @@ function blockedRows(records) {
     .sort((a, b) => b.count - a.count);
 }
 
+function summarizeReason(reason) {
+  if (reason.includes("watchlist scan")) return "Watchlist scan only";
+  if (reason.includes("above entry")) return "Current price above entry";
+  if (reason.includes("below short entry")) return "Current price below short entry";
+  if (reason.includes("R:R")) return "Risk/reward too low";
+  return reason;
+}
+
 function renderBlockedReasons(records) {
   const rows = blockedRows(records);
   const c = document.getElementById("blockedContainer");
@@ -464,7 +510,7 @@ function renderBlockedReasons(records) {
     <table>
       <thead><tr><th>Reason</th><th class="num">Count</th></tr></thead>
       <tbody>
-        ${rows.map(r => `<tr><td>${r.reason}</td><td class="num">${r.count}</td></tr>`).join("")}
+        ${rows.map(r => `<tr><td><strong>${summarizeReason(r.reason)}</strong><div class="state-muted">${r.reason}</div></td><td class="num">${r.count}</td></tr>`).join("")}
       </tbody>
     </table>
   `;
@@ -485,7 +531,7 @@ function renderClassicComparison(records) {
       <thead>
         <tr>
           <th>Date</th><th>Ticker</th><th>Mode</th><th>Verdict</th>
-          <th class="num">Final</th><th class="num">Classic</th><th class="num">Delta</th><th>Outcome</th>
+          <th class="num">Final</th><th class="num">Classic</th><th class="num">Delta</th><th>Read</th><th>Outcome</th>
         </tr>
       </thead>
       <tbody>
@@ -493,6 +539,7 @@ function renderClassicComparison(records) {
           const final = r.bull_prob;
           const classic = r.classic_p_up;
           const delta = final - classic;
+          const read = Math.abs(delta) >= 0.15 ? "Review" : "Aligned";
           return `
             <tr>
               <td>${r.ts.slice(0, 16).replace("T", " ")}</td>
@@ -502,6 +549,7 @@ function renderClassicComparison(records) {
               <td class="num">${(final * 100).toFixed(0)}%</td>
               <td class="num">${(classic * 100).toFixed(0)}%</td>
               <td class="num">${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(0)}%</td>
+              <td class="${read === "Aligned" ? "state-good" : "state-bad"}">${read}</td>
               <td>${outcomeBadge(r.outcome)}</td>
             </tr>
           `;
