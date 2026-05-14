@@ -195,7 +195,7 @@
 <div class="grid" id="kpis"></div>
 
 <h2>2. Blocked Reasons</h2>
-<p class="section-note">Rejected setups are often more useful than entries: this shows which safety rule stopped them.</p>
+<p class="section-note">Blocked means the model may have liked the setup, but a safety rule prevented ENTRY. It does not mean the stock is bad; it means the trade plan failed a risk check.</p>
 <div id="blockedContainer"></div>
 
 <h2>3. Classic vs Final</h2>
@@ -480,14 +480,24 @@ function renderAccuracyChart(containerId, rows, emptyText) {
 }
 
 function blockedRows(records) {
-  const counts = {};
+  const groups = {};
   for (const r of records) {
     for (const reason of r.entry_block_reasons || []) {
-      counts[reason] = (counts[reason] || 0) + 1;
+      const key = summarizeReason(reason);
+      if (!groups[key]) groups[key] = { rule: key, count: 0, reasons: new Set(), examples: [] };
+      groups[key].count++;
+      groups[key].reasons.add(reason);
+      if (groups[key].examples.length < 5) {
+        groups[key].examples.push({
+          ticker: r.ticker,
+          date: r.ts ? r.ts.slice(0, 10) : "",
+          mode: recordMode(r).toUpperCase(),
+          reason,
+        });
+      }
     }
   }
-  return Object.entries(counts)
-    .map(([reason, count]) => ({ reason, count }))
+  return Object.values(groups)
     .sort((a, b) => b.count - a.count);
 }
 
@@ -499,6 +509,22 @@ function summarizeReason(reason) {
   return reason;
 }
 
+function explainReason(rule) {
+  if (rule === "Risk/reward too low") {
+    return "The potential reward to TP is too small compared with the risk to SL. The bot requires at least 1.5R, so a setup like R:R 1.23 is blocked even if the chart looks interesting.";
+  }
+  if (rule === "Current price above entry") {
+    return "For a long signal, price already ran too far above the suggested entry. Chasing late entries usually worsens risk/reward.";
+  }
+  if (rule === "Current price below short entry") {
+    return "For a short signal, price already moved too far below the suggested entry. The trade may be stale.";
+  }
+  if (rule === "Watchlist scan only") {
+    return "This came from a watchlist scan, not a Discord trade signal. It can flag interest, but it should not become an ENTRY by itself.";
+  }
+  return "Safety rule blocked this setup before it could become an ENTRY.";
+}
+
 function renderBlockedReasons(records) {
   const rows = blockedRows(records);
   const c = document.getElementById("blockedContainer");
@@ -508,9 +534,16 @@ function renderBlockedReasons(records) {
   }
   c.innerHTML = `
     <table>
-      <thead><tr><th>Reason</th><th class="num">Count</th></tr></thead>
+      <thead><tr><th>Rule</th><th>What it means</th><th>Examples</th><th class="num">Count</th></tr></thead>
       <tbody>
-        ${rows.map(r => `<tr><td><strong>${summarizeReason(r.reason)}</strong><div class="state-muted">${r.reason}</div></td><td class="num">${r.count}</td></tr>`).join("")}
+        ${rows.map(r => `
+          <tr>
+            <td><strong>${r.rule}</strong><div class="state-muted">${Array.from(r.reasons).join(" · ")}</div></td>
+            <td>${explainReason(r.rule)}</td>
+            <td>${r.examples.map(e => `<div><strong>${e.ticker}</strong> ${e.mode} ${e.date}<br><span class="state-muted">${e.reason}</span></div>`).join("")}</td>
+            <td class="num">${r.count}</td>
+          </tr>
+        `).join("")}
       </tbody>
     </table>
   `;
