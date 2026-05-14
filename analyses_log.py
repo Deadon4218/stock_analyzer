@@ -1,14 +1,19 @@
 """
 Append-only history of every analysis we run.
-data/analyses.jsonl — one JSON line per analysis.
+Backed by Upstash Redis list — one JSON entry per record.
 Used for: backtesting strategies, agent accuracy tracking, dashboard.
+
+Redis layout:
+  analyses   — List of JSON strings, oldest at head, newest at tail.
+               Capped at MAX_RECORDS via LTRIM to fit Upstash storage.
 """
 import json
-import os
 from datetime import datetime, timezone
-from pathlib import Path
 
-LOG_FILE = Path(os.environ.get("ANALYSES_LOG_PATH", "data/analyses.jsonl"))
+import redis_store as r
+
+_K_LOG = "analyses"
+MAX_RECORDS = 10_000  # Upstash free tier: 256MB, ~1-2KB per record → safe
 
 
 def _agent_to_dict(v) -> dict:
@@ -34,7 +39,6 @@ def log_analysis(result, source: str):
     Append a structured record for an AnalysisResult.
     source: 'broadcast' | 'personal' | 'manual'
     """
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     record = {
@@ -69,20 +73,32 @@ def log_analysis(result, source: str):
         record["stop_loss"] = pl.stop_loss
         record["rr_ratio"] = pl.rr_ratio
 
-    with open(LOG_FILE, "a") as f:
-        f.write(json.dumps(record) + "\n")
+    r.rpush(_K_LOG, json.dumps(record, separators=(",", ":")))
+
+    # Cap the list size — keep newest MAX_RECORDS, drop the rest from the head.
+    length = r.llen(_K_LOG)
+    if length > MAX_RECORDS:
+        r.ltrim(_K_LOG, length - MAX_RECORDS, -1)
 
 
 def read_all() -> list[dict]:
-    if not LOG_FILE.exists():
-        return []
-    with open(LOG_FILE, "r") as f:
-        return [json.loads(line) for line in f if line.strip()]
+    raw = r.lrange(_K_LOG, 0, -1)
+    out = []
+    for line in raw:
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return out
 
 
 def write_all(records: list[dict]):
-    """Rewrite the file — used by outcome_tracker to update outcomes in place."""
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "w") as f:
-        for r in records:
-            f.write(json.dumps(r) + "\n")
+    """Rewrite the log — used by outcome_tracker to update outcomes in place.
+    Atomicity caveat: Upstash REST is per-command, so a delete-then-rpush has
+    a brief window where the list is empty. Acceptable for our usage."""
+    r.delete(_K_LOG)
+    if records:
+        # rpush in chunks of 500 to stay well under any payload size limit
+        for i in range(0, len(records), 500):
+            chunk = records[i : i + 500]
+            r.rpush(_K_LOG, *[json.dumps(rec, separators=(",", ":")) for rec in chunk])

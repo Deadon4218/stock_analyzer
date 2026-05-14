@@ -1,0 +1,13 @@
+# Vercel only needs api/* + the project modules. Exclude:
+venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+data/
+_e2e_test.py
+_migrate_to_redis.py
+# CLI / GitHub-Actions-only entrypoints — should NOT be auto-detected as serverless functions
+main.py
+run_broadcast.py
+run_personal.py
