@@ -83,6 +83,7 @@
     padding: 12px 14px;
   }
   .notice strong { color: #58a6ff; }
+  .notice.compact { margin: 0 0 14px; }
 
   .grid {
     display: grid;
@@ -241,11 +242,13 @@
 </div>
 
 <h2>3. Recommendation Performance</h2>
-<p class="section-note">The last 20 ENTRY recommendations in this view. Return uses the saved entry, take-profit, and stop-loss. Open trades are shown in gray at 0 until the outcome tracker resolves them.</p>
+<p class="section-note">Only closed ENTRY recommendations are shown in the two performance charts. Open recommendations are listed separately below because they do not have a result yet.</p>
+<div id="recommendationSummary" class="notice compact"></div>
 <div class="chart-grid">
   <div class="chart-wrap" id="recommendationReturnsWrap"><canvas id="recommendationReturnsChart"></canvas></div>
   <div class="chart-wrap" id="cumulativeRWrap"><canvas id="cumulativeRChart"></canvas></div>
 </div>
+<div id="openEntriesContainer"></div>
 
 <h2>4. Model Agreement</h2>
 <p class="section-note">This compares the final combined model with the classic rules engine. The strongest setups are usually where both point in the same direction.</p>
@@ -576,6 +579,11 @@ function renderStockFlow(records) {
 
 function renderRecommendationPerformance(records) {
   const entries = entryRecommendations(records);
+  const resolvedEntries = entries.filter(isResolved);
+  const openEntries = entries.filter(r => !isResolved(r));
+  renderRecommendationSummary(entries, resolvedEntries, openEntries);
+  renderOpenEntries(openEntries);
+
   if (!entries.length) {
     const reason = activeMode === "scan"
       ? "SCAN rows are watchlist checks, so they do not create ENTRY recommendations. Switch to SIGNAL or ALL to see trade recommendations."
@@ -584,19 +592,24 @@ function renderRecommendationPerformance(records) {
     setEmpty("cumulativeRWrap", reason);
     return;
   }
+  if (!resolvedEntries.length) {
+    setEmpty("recommendationReturnsWrap", "There are ENTRY recommendations, but none have reached TP/SL/expiry yet. The result chart will appear after the outcome tracker closes at least one.");
+    setEmpty("cumulativeRWrap", "No closed ENTRY trades yet, so there is no cumulative R to plot.");
+    return;
+  }
 
-  const labels = entries.map(r => `${r.ticker} ${r.ts ? r.ts.slice(5, 10) : ""}`);
-  const returns = entries.map(tradeReturnPct);
-  const rValues = entries.map(tradeR);
-  const colors = returns.map(v => v === null ? "#6e7681" : v >= 0 ? "#3fb950" : "#f85149");
+  const labels = resolvedEntries.map(r => `${r.ticker} ${r.ts ? r.ts.slice(5, 10) : ""}`);
+  const returns = resolvedEntries.map(tradeReturnPct);
+  const rValues = resolvedEntries.map(tradeR);
+  const colors = returns.map(v => v >= 0 ? "#3fb950" : "#f85149");
   const ctx = canvasIn("recommendationReturnsWrap", "recommendationReturnsChart");
   new Chart(ctx, {
     type: "bar",
     data: {
       labels,
       datasets: [{
-        label: "Return if followed",
-        data: returns.map(v => v === null ? 0 : v),
+        label: "Closed trade return",
+        data: returns,
         backgroundColor: colors,
       }],
     },
@@ -607,10 +620,10 @@ function renderRecommendationPerformance(records) {
         tooltip: {
           callbacks: {
             label: ctx => {
-              const r = entries[ctx.dataIndex];
+              const r = resolvedEntries[ctx.dataIndex];
               const pct = tradeReturnPct(r);
               const levels = `entry ${fmtMoney(r.entry)} / TP ${fmtMoney(r.take_profit)} / SL ${fmtMoney(r.stop_loss)}`;
-              return pct === null ? `Open: ${levels}` : `${fmtPct(pct)} | ${outcomeLabel(r.outcome)} | ${levels}`;
+              return `${fmtPct(pct)} | ${outcomeLabel(r.outcome)} | ${levels}`;
             },
           },
         },
@@ -624,7 +637,7 @@ function renderRecommendationPerformance(records) {
 
   let cumulative = 0;
   const cumulativeR = rValues.map(v => {
-    if (v !== null) cumulative += v;
+    cumulative += v;
     return +cumulative.toFixed(2);
   });
   const ctxR = canvasIn("cumulativeRWrap", "cumulativeRChart");
@@ -649,9 +662,9 @@ function renderRecommendationPerformance(records) {
         tooltip: {
           callbacks: {
             label: ctx => {
-              const r = entries[ctx.dataIndex];
+              const r = resolvedEntries[ctx.dataIndex];
               const rValue = tradeR(r);
-              return rValue === null ? "Open trade" : `${rValue >= 0 ? "+" : ""}${rValue.toFixed(2)}R on ${r.ticker}`;
+              return `${rValue >= 0 ? "+" : ""}${rValue.toFixed(2)}R on ${r.ticker}`;
             },
           },
         },
@@ -662,6 +675,54 @@ function renderRecommendationPerformance(records) {
       },
     },
   });
+}
+
+function renderRecommendationSummary(entries, resolvedEntries, openEntries) {
+  const wins = resolvedEntries.filter(r => r.outcome === "tp_hit").length;
+  const losses = resolvedEntries.filter(r => r.outcome === "sl_hit").length;
+  const unresolvedText = openEntries.length
+    ? `${openEntries.length} still open and waiting for TP/SL.`
+    : "No open ENTRY recommendations in this view.";
+  const measuredText = resolvedEntries.length
+    ? `${resolvedEntries.length} closed recommendations: ${wins} TP, ${losses} SL.`
+    : "No closed ENTRY recommendations yet.";
+  document.getElementById("recommendationSummary").innerHTML =
+    `<strong>${entries.length} ENTRY recommendations</strong> in this tab. ${measuredText} ${unresolvedText}`;
+}
+
+function renderOpenEntries(openEntries) {
+  const c = document.getElementById("openEntriesContainer");
+  if (!openEntries.length) {
+    c.innerHTML = "";
+    return;
+  }
+  const rows = openEntries.slice().reverse();
+  c.innerHTML = `
+    <h3 style="margin-top:18px">Open Recommendations</h3>
+    <p class="section-note">These are not counted in performance yet. They are waiting for the outcome tracker to mark TP, SL, or expired.</p>
+    <div class="table-wrap" style="height:auto; max-height:320px">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Ticker</th><th>Dir</th><th class="num">Final</th><th class="num">Classic</th><th class="num">Entry</th><th class="num">TP</th><th class="num">SL</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td>${escapeHtml(r.ts ? r.ts.slice(0, 16).replace("T", " ") : "")}</td>
+              <td><strong>${escapeHtml(r.ticker)}</strong></td>
+              <td>${escapeHtml((r.direction || "long").toUpperCase())}</td>
+              <td class="num">${typeof r.bull_prob === "number" ? (r.bull_prob * 100).toFixed(0) + "%" : "—"}</td>
+              <td class="num">${typeof r.classic_p_up === "number" ? (r.classic_p_up * 100).toFixed(0) + "%" : "—"}</td>
+              <td class="num">${fmtMoney(r.entry)}</td>
+              <td class="num">${fmtMoney(r.take_profit)}</td>
+              <td class="num">${fmtMoney(r.stop_loss)}</td>
+              <td><span class="status-pill status-open">Open</span></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function outcomeLabel(outcome) {
