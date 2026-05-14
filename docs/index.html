@@ -146,6 +146,11 @@
   .outcome-open { color: #d29922; }
   .outcome-expired { color: #6e7681; }
 
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+    gap: 14px;
+  }
   .chart-wrap {
     background: #161b22;
     padding: 16px;
@@ -194,34 +199,48 @@
 <p class="section-note">Numbers in this section follow the selected view above. Win rate is shown with its sample size.</p>
 <div class="grid" id="kpis"></div>
 
-<h2>2. Blocked Reasons</h2>
+<h2>2. Recommendation Performance</h2>
+<p class="section-note">The last 20 ENTRY recommendations in this view. Return uses the saved entry, take-profit, and stop-loss. Open trades stay blank until the outcome tracker resolves them.</p>
+<div class="chart-grid">
+  <div class="chart-wrap" id="recommendationReturnsWrap"><canvas id="recommendationReturnsChart"></canvas></div>
+  <div class="chart-wrap" id="cumulativeRWrap"><canvas id="cumulativeRChart"></canvas></div>
+</div>
+
+<h2>3. Model Agreement</h2>
+<p class="section-note">This compares the final combined model with the classic rules engine. The strongest setups are usually where both point in the same direction.</p>
+<div class="chart-grid">
+  <div class="chart-wrap" id="agreementScatterWrap"><canvas id="agreementScatterChart"></canvas></div>
+  <div class="chart-wrap" id="consensusWinRateWrap"><canvas id="consensusWinRateChart"></canvas></div>
+</div>
+
+<h2>4. Blocked Reasons</h2>
 <p class="section-note">Blocked means the model may have liked the setup, but a safety rule prevented ENTRY. It does not mean the stock is bad; it means the trade plan failed a risk check.</p>
 <div id="blockedContainer"></div>
 
-<h2>3. Classic vs Final</h2>
+<h2>5. Classic vs Final</h2>
 <p class="section-note">Final is the combined probability. Classic is the non-AI rules engine. Large gaps deserve review.</p>
 <div id="classicContainer"></div>
 
-<h2>4. Recent Analyses</h2>
+<h2>6. Recent Analyses</h2>
 <p class="section-note">The latest records in the selected view, including mode, direction, probabilities, levels, and outcome.</p>
 <div id="recentContainer"></div>
 
-<h2>5. Accuracy By Strategy</h2>
+<h2>7. Accuracy By Strategy</h2>
 <p class="section-note">Resolved outcomes only. Treat small sample sizes as weak evidence.</p>
 <div id="strategyChartContainer"></div>
 
-<h2>6. Accuracy By Lens</h2>
+<h2>8. Accuracy By Lens</h2>
 <p class="section-note">Resolved outcomes only. This helps identify which lens is adding useful signal.</p>
 <div id="agentChartContainer"></div>
 
-<h2>7. Lens Activity</h2>
+<h2>9. Lens Activity</h2>
 <p class="section-note">Average p_up shows bias. Accuracy above is the better measure of quality.</p>
 <div class="chart-wrap" id="agentScoresWrap"><canvas id="agentScoresChart"></canvas></div>
 
-<h2>8. Strategy Types</h2>
+<h2>10. Strategy Types</h2>
 <div class="agent-grid" id="strategies"></div>
 
-<h2>9. Evidence Lens Roster</h2>
+<h2>11. Evidence Lens Roster</h2>
 <div class="agent-grid" id="agentRoster"></div>
 
 <p class="footer">
@@ -277,6 +296,75 @@ function formatRate(wins, total) {
   return { value: (wins / total * 100).toFixed(1) + "%", detail: `${wins}/${total}` };
 }
 
+function fmtPct(v, digits = 1) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
+}
+
+function fmtMoney(v) {
+  return typeof v === "number" && Number.isFinite(v) ? `$${v.toFixed(2)}` : "—";
+}
+
+function tradeReturnPct(record) {
+  if (!isResolved(record)) return null;
+  if (typeof record.return_pct === "number") return record.return_pct;
+  const entry = record.entry;
+  const tp = record.take_profit;
+  const sl = record.stop_loss;
+  if (!entry || !tp || !sl) return null;
+  const direction = record.direction || "long";
+  if (record.outcome === "tp_hit") {
+    return direction === "short" ? ((entry - tp) / entry) * 100 : ((tp - entry) / entry) * 100;
+  }
+  if (record.outcome === "sl_hit") {
+    return direction === "short" ? ((entry - sl) / entry) * 100 : ((sl - entry) / entry) * 100;
+  }
+  return 0;
+}
+
+function tradeR(record) {
+  if (!isResolved(record)) return null;
+  if (record.outcome === "tp_hit") {
+    return typeof record.rr_ratio === "number" ? record.rr_ratio : 1;
+  }
+  if (record.outcome === "sl_hit") return -1;
+  return 0;
+}
+
+function entryRecommendations(records) {
+  return records
+    .filter(r => r.verdict === "ENTRY")
+    .slice(-20);
+}
+
+function aiAveragePUp(record) {
+  const values = (record.agents || [])
+    .filter(a => a.name !== "Classic Technical")
+    .map(a => typeof a.p_up === "number" ? a.p_up : a.score)
+    .filter(v => typeof v === "number" && Number.isFinite(v));
+  if (!values.length) return null;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function finalDirectionScore(record) {
+  const direction = record.direction || "long";
+  const pUp = typeof record.bull_prob === "number" ? record.bull_prob : aiAveragePUp(record);
+  if (typeof pUp !== "number") return null;
+  return direction === "short" ? 1 - pUp : pUp;
+}
+
+function classicDirectionScore(record) {
+  if (typeof record.classic_p_up !== "number") return null;
+  return (record.direction || "long") === "short" ? 1 - record.classic_p_up : record.classic_p_up;
+}
+
+function hasModelConsensus(record) {
+  const finalScore = finalDirectionScore(record);
+  const classicScore = classicDirectionScore(record);
+  if (finalScore === null || classicScore === null) return null;
+  return finalScore >= 0.67 && classicScore >= 0.67;
+}
+
 function computeKpis(records) {
   const resolved = records.filter(isResolved);
   const entries = resolved.filter(r => r.verdict === "ENTRY");
@@ -309,6 +397,117 @@ function renderKpis(k) {
   document.getElementById("kpis").innerHTML = cards.map(c =>
     `<div class="card"><div class="label">${c.label}</div><div class="value">${c.value}</div>${c.detail ? `<div class="detail">${c.detail}</div>` : ""}</div>`
   ).join("");
+}
+
+function chartTextColor() { return "#c9d1d9"; }
+function chartGridColor() { return "#21262d"; }
+
+function setEmpty(containerId, text) {
+  document.getElementById(containerId).innerHTML = `<div class="empty">${text}</div>`;
+}
+
+function canvasIn(containerId, canvasId) {
+  const c = document.getElementById(containerId);
+  Chart.getChart(canvasId)?.destroy();
+  c.innerHTML = `<canvas id="${canvasId}"></canvas>`;
+  return document.getElementById(canvasId).getContext("2d");
+}
+
+function renderRecommendationPerformance(records) {
+  const entries = entryRecommendations(records);
+  if (!entries.length) {
+    setEmpty("recommendationReturnsWrap", "No ENTRY recommendations yet in this view. SIGNAL mode will fill this after real trade alerts pass all safety checks.");
+    setEmpty("cumulativeRWrap", "Cumulative R appears after ENTRY recommendations are created.");
+    return;
+  }
+
+  const labels = entries.map(r => `${r.ticker} ${r.ts ? r.ts.slice(5, 10) : ""}`);
+  const returns = entries.map(tradeReturnPct);
+  const rValues = entries.map(tradeR);
+  const colors = returns.map(v => v === null ? "#6e7681" : v >= 0 ? "#3fb950" : "#f85149");
+  const ctx = canvasIn("recommendationReturnsWrap", "recommendationReturnsChart");
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Return if followed",
+        data: returns,
+        backgroundColor: colors,
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: chartTextColor() } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const r = entries[ctx.dataIndex];
+              const pct = tradeReturnPct(r);
+              const levels = `entry ${fmtMoney(r.entry)} / TP ${fmtMoney(r.take_profit)} / SL ${fmtMoney(r.stop_loss)}`;
+              return pct === null ? `Open: ${levels}` : `${fmtPct(pct)} | ${outcomeLabel(r.outcome)} | ${levels}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { color: chartTextColor(), maxRotation: 45, minRotation: 0 }, grid: { display: false } },
+        y: { ticks: { color: chartTextColor(), callback: v => v + "%" }, grid: { color: chartGridColor() } },
+      },
+    },
+  });
+
+  let cumulative = 0;
+  const cumulativeR = rValues.map(v => {
+    if (v === null) return null;
+    cumulative += v;
+    return +cumulative.toFixed(2);
+  });
+  const ctxR = canvasIn("cumulativeRWrap", "cumulativeRChart");
+  new Chart(ctxR, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "Cumulative R",
+        data: cumulativeR,
+        borderColor: "#58a6ff",
+        backgroundColor: "rgba(88, 166, 255, 0.18)",
+        pointBackgroundColor: rValues.map(v => v === null ? "#6e7681" : v >= 0 ? "#3fb950" : "#f85149"),
+        tension: 0.25,
+        spanGaps: true,
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: chartTextColor() } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const r = entries[ctx.dataIndex];
+              const rValue = tradeR(r);
+              return rValue === null ? "Open trade" : `${rValue >= 0 ? "+" : ""}${rValue.toFixed(2)}R on ${r.ticker}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { color: chartTextColor(), maxRotation: 45, minRotation: 0 }, grid: { display: false } },
+        y: { ticks: { color: chartTextColor(), callback: v => v + "R" }, grid: { color: chartGridColor() } },
+      },
+    },
+  });
+}
+
+function outcomeLabel(outcome) {
+  return {
+    tp_hit: "TP hit",
+    sl_hit: "SL hit",
+    expired: "Expired",
+    still_open: "Open",
+  }[outcome] || "Open";
 }
 
 function renderStrategies(strategies, agents) {
@@ -393,6 +592,90 @@ function renderAgentScoresChart(perAgent) {
       scales: {
         x: { ticks: { color: "#c9d1d9", callback: v => v + "%" }, grid: { color: "#21262d" }, max: 100 },
         y: { ticks: { color: "#c9d1d9" }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+function renderAgreementCharts(records) {
+  const scored = records
+    .filter(r => typeof r.classic_p_up === "number" && typeof r.bull_prob === "number")
+    .slice(-40);
+  if (!scored.length) {
+    setEmpty("agreementScatterWrap", "Need records with both Final and Classic scores.");
+    setEmpty("consensusWinRateWrap", "Consensus win-rate appears after scored records resolve to TP/SL.");
+    return;
+  }
+
+  const scatterCtx = canvasIn("agreementScatterWrap", "agreementScatterChart");
+  new Chart(scatterCtx, {
+    type: "scatter",
+    data: {
+      datasets: [{
+        label: "Final vs Classic",
+        data: scored.map(r => ({
+          x: +(classicDirectionScore(r) * 100).toFixed(1),
+          y: +(finalDirectionScore(r) * 100).toFixed(1),
+          ticker: r.ticker,
+          verdict: r.verdict,
+        })),
+        backgroundColor: scored.map(r => r.verdict === "ENTRY" ? "#3fb950" : "#d29922"),
+        pointRadius: 5,
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: chartTextColor() } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const p = ctx.raw;
+              return `${p.ticker}: Classic ${p.x}% / Final ${p.y}% / ${p.verdict}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { title: { display: true, text: "Classic direction score", color: chartTextColor() }, min: 0, max: 100, ticks: { color: chartTextColor(), callback: v => v + "%" }, grid: { color: chartGridColor() } },
+        y: { title: { display: true, text: "Final direction score", color: chartTextColor() }, min: 0, max: 100, ticks: { color: chartTextColor(), callback: v => v + "%" }, grid: { color: chartGridColor() } },
+      },
+    },
+  });
+
+  const groups = {
+    consensus: { label: "Final + Classic agree", wins: 0, total: 0 },
+    noConsensus: { label: "No strong agreement", wins: 0, total: 0 },
+  };
+  for (const r of scored.filter(isResolved)) {
+    const consensus = hasModelConsensus(r);
+    const bucket = consensus ? groups.consensus : groups.noConsensus;
+    bucket.total++;
+    if (r.outcome === "tp_hit") bucket.wins++;
+  }
+  const rows = Object.values(groups).filter(g => g.total);
+  if (!rows.length) {
+    setEmpty("consensusWinRateWrap", "No resolved Final/Classic records yet. This will show whether agreement actually improves hit rate.");
+    return;
+  }
+  const consensusCtx = canvasIn("consensusWinRateWrap", "consensusWinRateChart");
+  new Chart(consensusCtx, {
+    type: "bar",
+    data: {
+      labels: rows.map(r => `${r.label} (n=${r.total})`),
+      datasets: [{
+        label: "TP hit rate",
+        data: rows.map(r => +(r.wins / r.total * 100).toFixed(1)),
+        backgroundColor: rows.map(r => r.wins / r.total >= 0.6 ? "#3fb950" : r.wins / r.total >= 0.5 ? "#d29922" : "#f85149"),
+      }],
+    },
+    options: {
+      indexAxis: "y",
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: chartTextColor() } } },
+      scales: {
+        x: { min: 0, max: 100, ticks: { color: chartTextColor(), callback: v => v + "%" }, grid: { color: chartGridColor() } },
+        y: { ticks: { color: chartTextColor() }, grid: { display: false } },
       },
     },
   });
@@ -644,6 +927,8 @@ function renderRecent(records) {
 function renderDashboard() {
   const records = visibleRecords();
   renderKpis(computeKpis(records));
+  renderRecommendationPerformance(records);
+  renderAgreementCharts(records);
   renderBlockedReasons(records);
   renderClassicComparison(records);
   renderStrategies(allAgentsData.strategies || {}, allAgentsData.agents || []);
