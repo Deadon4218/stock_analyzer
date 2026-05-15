@@ -24,6 +24,9 @@ MA_SLOPE_LOOKBACK = 20   # MA150 today vs MA150 N days ago → trend
 MAX_PCT_ABOVE_MA = 0.03  # 3% — top of the band
 CHUNK_SIZE = 50          # yfinance bulk download in groups of N tickers
 HISTORY_PERIOD = "1y"    # ~250 trading days, enough for MA150 + 20-day lookback
+ATR_PERIOD = 14          # standard ATR window — volatility indicator
+VOL_RECENT_WINDOW = 5    # "recent" volume average (last N days)
+VOL_BASELINE_WINDOW = 20 # baseline volume average (days BEFORE the recent window)
 
 
 def load_universe() -> list[str]:
@@ -32,6 +35,37 @@ def load_universe() -> list[str]:
     with path.open() as f:
         data = json.load(f)
     return data["combined"]
+
+
+def _calc_atr(hist: pd.DataFrame, period: int = ATR_PERIOD) -> Optional[float]:
+    """ATR over the last `period` bars. Returns None if insufficient data."""
+    if len(hist) < period + 1:
+        return None
+    high = hist["High"]
+    low = hist["Low"]
+    close = hist["Close"]
+    true_range = pd.concat([
+        high - low,
+        (high - close.shift()).abs(),
+        (low - close.shift()).abs(),
+    ], axis=1).max(axis=1)
+    atr = true_range.rolling(period).mean().iloc[-1]
+    return float(atr) if pd.notna(atr) else None
+
+
+def _calc_vol_change_pct(volumes: pd.Series) -> Optional[float]:
+    """
+    Recent 5-day avg volume vs prior 20-day avg → percent change.
+    Captures accumulation patterns. Positive = volume building up.
+    """
+    needed = VOL_RECENT_WINDOW + VOL_BASELINE_WINDOW
+    if len(volumes) < needed:
+        return None
+    recent = float(volumes.tail(VOL_RECENT_WINDOW).mean())
+    baseline = float(volumes.iloc[-needed:-VOL_RECENT_WINDOW].mean())
+    if baseline == 0:
+        return None
+    return (recent / baseline - 1) * 100
 
 
 def _analyze_one(ticker: str, hist: pd.DataFrame) -> Optional[dict]:
@@ -58,6 +92,10 @@ def _analyze_one(ticker: str, hist: pd.DataFrame) -> Optional[dict]:
     volumes = hist["Volume"].dropna()
     volume_today = int(volumes.iloc[-1]) if len(volumes) else 0
 
+    atr = _calc_atr(hist)
+    atr_pct = (atr / current * 100) if (atr and current) else None
+    vol_change_pct = _calc_vol_change_pct(volumes)
+
     return {
         "ticker": ticker,
         "price": round(current, 2),
@@ -67,6 +105,9 @@ def _analyze_one(ticker: str, hist: pd.DataFrame) -> Optional[dict]:
         "rising_ma": ma150_today > ma150_then,
         "ma150_slope_pct": round((ma150_today - ma150_then) / ma150_then * 100, 2)
                             if ma150_then else 0,
+        "atr_14": round(atr, 2) if atr is not None else None,
+        "atr_pct": round(atr_pct, 2) if atr_pct is not None else None,
+        "vol_change_pct": round(vol_change_pct, 1) if vol_change_pct is not None else None,
     }
 
 
@@ -146,16 +187,30 @@ def format_report(matches: list[dict], scan_ts: str, cap_per_section: int = 30) 
         lines.append("No stocks currently in the band. Check again later.")
         return "\n".join(lines)
 
+    def _fmt_line(m: dict) -> str:
+        vol_m = m["volume"] / 1_000_000
+        # Backward-compat: these fields are absent on snapshots from older runs.
+        vol_chg = m.get("vol_change_pct")
+        atr = m.get("atr_14")
+        atr_pct = m.get("atr_pct")
+
+        vol_chg_str = f" ({vol_chg:+.0f}% 5d/20d)" if vol_chg is not None else ""
+        if atr is not None and atr_pct is not None:
+            atr_str = f"  ATR: ${atr:.2f} ({atr_pct:.1f}%)"
+        else:
+            atr_str = ""
+
+        return (
+            f"  <b>{m['ticker']}</b> ${m['price']:.2f}  "
+            f"MA: ${m['ma150']:.2f} (+{m['pct_above_ma']:.1f}%)  "
+            f"Vol: {vol_m:.1f}M{vol_chg_str}{atr_str}"
+        )
+
     if rising:
         shown = rising[:cap_per_section]
         lines.append(f"📈 <b>Bullish reversal — MA150 rising ({len(rising)})</b>")
         for m in shown:
-            vol_m = m["volume"] / 1_000_000
-            lines.append(
-                f"  <b>{m['ticker']}</b> ${m['price']:.2f}  "
-                f"MA: ${m['ma150']:.2f} (+{m['pct_above_ma']:.1f}%)  "
-                f"Vol: {vol_m:.1f}M"
-            )
+            lines.append(_fmt_line(m))
         if len(rising) > cap_per_section:
             lines.append(f"  …and {len(rising) - cap_per_section} more")
         lines.append("")
@@ -164,12 +219,7 @@ def format_report(matches: list[dict], scan_ts: str, cap_per_section: int = 30) 
         shown = weak[:cap_per_section]
         lines.append(f"📊 <b>Just above MA150 — MA flat/falling ({len(weak)})</b>")
         for m in shown:
-            vol_m = m["volume"] / 1_000_000
-            lines.append(
-                f"  <b>{m['ticker']}</b> ${m['price']:.2f}  "
-                f"MA: ${m['ma150']:.2f} (+{m['pct_above_ma']:.1f}%)  "
-                f"Vol: {vol_m:.1f}M"
-            )
+            lines.append(_fmt_line(m))
         if len(weak) > cap_per_section:
             lines.append(f"  …and {len(weak) - cap_per_section} more")
 
