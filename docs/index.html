@@ -322,6 +322,7 @@
   }
   .page { display: none; }
   .page.active { display: block; }
+  .hidden { display: none !important; }
   .page-kicker {
     color: var(--muted);
     font-size: 13px;
@@ -400,9 +401,35 @@
       </div>
     </section>
 
-    <h2>Closed Performance</h2>
-    <p class="page-kicker">This page shows measured performance only. Open trades are intentionally separated so they do not distort results.</p>
-    <section class="grid-two">
+    <section id="scanOverviewSection" class="hidden">
+      <h2>Scan Results</h2>
+      <p class="page-kicker">SCAN rows are watchlist/research checks. They do not become open trades, but they should still be visible for review.</p>
+      <section class="grid-two">
+        <div class="panel chart-panel short">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title"><i data-lucide="radar"></i>Scan Score Bands</div>
+              <div class="panel-subtitle">How many scanned tickers look strong, watchable, neutral, or weak.</div>
+            </div>
+          </div>
+          <canvas id="scanScoreChart"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title"><i data-lucide="search-check"></i>Latest Scan Results</div>
+              <div class="panel-subtitle">Recent watchlist checks with reference entry, TP, and SL levels.</div>
+            </div>
+          </div>
+          <div id="scanOverviewTable"></div>
+        </div>
+      </section>
+    </section>
+
+    <section id="closedPerformanceSection">
+      <h2>Closed Performance</h2>
+      <p class="page-kicker">This page shows measured performance only. Open trades are intentionally separated so they do not distort results.</p>
+      <section class="grid-two">
       <div class="panel chart-panel short">
         <div class="panel-head">
           <div>
@@ -421,6 +448,7 @@
         </div>
         <div id="closedTable"></div>
       </div>
+      </section>
     </section>
   </section>
 
@@ -707,7 +735,11 @@ function renderModeNote(stats) {
   document.getElementById("modeNote").innerHTML = notes[activeMode];
 }
 
-function renderKpis(stats) {
+function renderKpis(stats, records) {
+  if (activeMode === "scan") {
+    renderScanKpis(records);
+    return;
+  }
   const winRate = stats.winRate === null ? "-" : `${(stats.winRate * 100).toFixed(1)}%`;
   const avgR = stats.avgR === null ? "-" : `${stats.avgR >= 0 ? "+" : ""}${stats.avgR.toFixed(2)}R`;
   const totalR = `${stats.totalR >= 0 ? "+" : ""}${stats.totalR.toFixed(2)}R`;
@@ -731,8 +763,45 @@ function renderKpis(stats) {
   `).join("");
 }
 
+function renderScanKpis(records) {
+  const scored = records.filter(record => typeof directionScore(record) === "number");
+  const highAi = scored.filter(record => directionScore(record) >= .67);
+  const strongAi = scored.filter(record => directionScore(record) >= .75);
+  const aiClassicAgree = scored.filter(record => {
+    const classic = classicDirectionScore(record);
+    return typeof classic === "number" && directionScore(record) >= .67 && classic >= .67;
+  });
+  const avgScore = scored.length
+    ? scored.reduce((sum, record) => sum + directionScore(record), 0) / scored.length
+    : null;
+  const rowsWithLevels = records.filter(record => record.entry && record.take_profit && record.stop_loss);
+  const cards = [
+    { label: "Scans Logged", value: records.length, detail: "Watchlist checks in this view", tone: "neutral", icon: "radar" },
+    { label: "High AI Score", value: highAi.length, detail: "Direction score >= 67%", tone: "good", icon: "trending-up" },
+    { label: "Strong AI Score", value: strongAi.length, detail: "Direction score >= 75%", tone: "good", icon: "target" },
+    { label: "AI + Classic Agree", value: aiClassicAgree.length, detail: "Both >= 67%", tone: "pending", icon: "git-compare-arrows" },
+    { label: "Avg Scan Score", value: avgScore === null ? "-" : `${(avgScore * 100).toFixed(0)}%`, detail: "Average direction score", tone: "neutral", icon: "gauge" },
+    { label: "Reference Levels", value: rowsWithLevels.length, detail: "Entry / TP / SL saved", tone: "neutral", icon: "list-checks" },
+  ];
+  document.getElementById("kpis").innerHTML = cards.map(card => `
+    <div class="kpi">
+      <div class="kpi-top">
+        <div class="label">${card.label}</div>
+        <div class="kpi-icon"><i data-lucide="${card.icon}"></i></div>
+      </div>
+      <div class="value ${card.tone}">${card.value}</div>
+      <div class="detail">${card.detail}</div>
+    </div>
+  `).join("");
+}
+
 function renderCumulativeChart(records) {
   const closed = closedEntries(records).slice(-40);
+  if (activeMode === "scan") {
+    document.getElementById("closedCountPill").textContent = "scan mode";
+    showEmpty("cumulativeChart", "SCAN is research/watchlist mode, so there are no closed trades here. Review the Scan Results section below.");
+    return;
+  }
   document.getElementById("closedCountPill").textContent = `${closed.length} closed`;
   if (!closed.length) {
     showEmpty("cumulativeChart", "No closed ENTRY trades yet in this view.");
@@ -767,6 +836,19 @@ function renderCumulativeChart(records) {
 }
 
 function decisionBuckets(records) {
+  if (activeMode === "scan") {
+    const scored = records.filter(record => typeof directionScore(record) === "number");
+    return [
+      { key: "Scanned", value: records.length, color: "#58a6ff" },
+      { key: "High AI >=67%", value: scored.filter(record => directionScore(record) >= .67).length, color: "#3fb950" },
+      { key: "Strong AI >=75%", value: scored.filter(record => directionScore(record) >= .75).length, color: "#a371f7" },
+      { key: "AI+Classic >=67%", value: scored.filter(record => {
+        const classic = classicDirectionScore(record);
+        return typeof classic === "number" && directionScore(record) >= .67 && classic >= .67;
+      }).length, color: "#d29922" },
+      { key: "Scan only", value: records.filter(record => (record.entry_block_reasons || []).some(reason => reason.includes("watchlist scan"))).length, color: "#f85149" },
+    ];
+  }
   const buckets = [
     { key: "All rows", value: records.length, color: "#58a6ff" },
     { key: "ENTRY", value: entries(records).length, color: "#a371f7" },
@@ -802,6 +884,10 @@ function renderFunnel(records) {
 }
 
 function renderClosedReturnChart(records) {
+  if (activeMode === "scan") {
+    showEmpty("closedReturnChart", "SCAN rows are not closed trades. Use the Scan Results table for watchlist review, or switch to SIGNAL for performance.");
+    return;
+  }
   const closed = closedEntries(records).slice(-20);
   if (!closed.length) {
     showEmpty("closedReturnChart", "No closed ENTRY trades to plot.");
@@ -855,6 +941,10 @@ function tableOrEmpty(containerId, rows, headers, rowFn, emptyText) {
 }
 
 function renderClosedTable(records) {
+  if (activeMode === "scan") {
+    document.getElementById("closedTable").innerHTML = `<div class="empty">SCAN rows are research checks, not closed trades.</div>`;
+    return;
+  }
   const rows = closedEntries(records).slice(-30).reverse();
   tableOrEmpty(
     "closedTable",
@@ -877,6 +967,74 @@ function renderClosedTable(records) {
       </tr>
     `,
     "No closed ENTRY trades in this view."
+  );
+}
+
+function renderScanOverview(records) {
+  const scanSection = document.getElementById("scanOverviewSection");
+  const closedSection = document.getElementById("closedPerformanceSection");
+  scanSection.classList.toggle("hidden", activeMode !== "scan");
+  closedSection.classList.toggle("hidden", activeMode === "scan");
+  if (activeMode !== "scan") {
+    Chart.getChart("scanScoreChart")?.destroy();
+    return;
+  }
+
+  const scored = records.filter(record => typeof directionScore(record) === "number");
+  const bands = [
+    { label: "Strong >=75%", count: scored.filter(record => directionScore(record) >= .75).length, color: "#3fb950" },
+    { label: "Watch 67-74%", count: scored.filter(record => directionScore(record) >= .67 && directionScore(record) < .75).length, color: "#d29922" },
+    { label: "Neutral 50-66%", count: scored.filter(record => directionScore(record) >= .5 && directionScore(record) < .67).length, color: "#58a6ff" },
+    { label: "Weak <50%", count: scored.filter(record => directionScore(record) < .5).length, color: "#f85149" },
+  ];
+  new Chart(resetCanvas("scanScoreChart"), {
+    type: "bar",
+    data: {
+      labels: bands.map(band => band.label),
+      datasets: [{
+        label: "Scans",
+        data: bands.map(band => band.count),
+        backgroundColor: bands.map(band => band.color),
+      }],
+    },
+    options: chartOptions({
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#d6dde6" }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: "#d6dde6", precision: 0 }, grid: { color: "#222a34" } },
+      },
+    }),
+  });
+
+  tableOrEmpty(
+    "scanOverviewTable",
+    records.slice(-30).reverse(),
+    [
+      { label: "Date" }, { label: "Ticker" }, { label: "Read" },
+      { label: "AI", num: true }, { label: "Classic", num: true },
+      { label: "Entry Ref", num: true }, { label: "TP Ref", num: true }, { label: "SL Ref", num: true },
+    ],
+    record => {
+      const score = directionScore(record);
+      const read = typeof score === "number" && score >= .75
+        ? `<span class="pill good">Strong scan</span>`
+        : typeof score === "number" && score >= .67
+          ? `<span class="pill pending">Watch</span>`
+          : `<span class="pill info">Research</span>`;
+      return `
+        <tr>
+          <td>${formatDate(record.ts)}</td>
+          <td><strong>${escapeHtml(record.ticker)}</strong></td>
+          <td>${read}</td>
+          <td class="num">${typeof score === "number" ? `${(score * 100).toFixed(0)}%` : "-"}</td>
+          <td class="num">${typeof record.classic_p_up === "number" ? `${(classicDirectionScore(record) * 100).toFixed(0)}%` : "-"}</td>
+          <td class="num">${formatMoney(record.entry)}</td>
+          <td class="num">${formatMoney(record.take_profit)}</td>
+          <td class="num">${formatMoney(record.stop_loss)}</td>
+        </tr>
+      `;
+    },
+    "No scan rows in this view."
   );
 }
 
@@ -1198,11 +1356,12 @@ function renderDashboard() {
   updatePageTabs();
   renderStatus(records, stats);
   renderModeNote(stats);
-  renderKpis(stats);
+  renderKpis(stats, records);
   renderCumulativeChart(records);
   renderFunnel(records);
   renderClosedReturnChart(records);
   renderClosedTable(records);
+  renderScanOverview(records);
   renderOpenTable(records);
   renderBlockedReasons(records);
   renderRecentDecisions(records);
