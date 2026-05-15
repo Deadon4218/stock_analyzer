@@ -32,6 +32,8 @@ WELCOME_TEXT = (
     "/agent_stats — Per-agent accuracy\n"
     "/strategy_stats — Accuracy by strategy type\n"
     "/history AAPL — Past calls on a ticker\n\n"
+    "<b>Screener:</b>\n"
+    "/screen — Stocks in 0-3% band above MA150 (S&amp;P 500 + NASDAQ-100, twice daily)\n\n"
     "You'll automatically receive:\n"
     "• Discord signals as they come in (shared, every 15 min)\n"
     "• Personal watchlist report 2x/day"
@@ -133,6 +135,20 @@ def handle_command(chat_id: int, text: str):
         ticker = args[0].upper().strip()
         from stats import ticker_history, format_ticker_history
         send_message(chat_id, format_ticker_history(ticker, ticker_history(ticker)))
+
+    elif cmd == "/screen":
+        import redis_store as r
+        from screener import format_report
+        snapshot = r.get_json("screener:latest")
+        if not snapshot:
+            send_message(
+                chat_id,
+                "📊 No screener results yet. The first scheduled scan runs at "
+                "12:30 UTC weekdays. Check back after that.",
+            )
+            return
+        report = format_report(snapshot["matches"], snapshot["ts"])
+        send_message(chat_id, report)
 
     else:
         send_message(chat_id, "Unknown command. Send /help for command list.")

@@ -1,0 +1,60 @@
+name: MA150 Screener
+
+on:
+  schedule:
+    # 1 hour before US market open (13:30 UTC during DST → run at 12:30 UTC).
+    # We also schedule 11:30 UTC as a buffer in case the 12:30 cron drifts.
+    - cron: "30 12 * * 1-5"
+    - cron: "30 11 * * 1-5"
+    # ~15 min after US market close (close = 20:00 UTC during DST).
+    - cron: "15 20 * * 1-5"
+    - cron: "30 20 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "Run label"
+        default: "Manual"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screener
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Determine label
+        id: label
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -lt "16" ]; then
+              echo "label=Pre-open" >> $GITHUB_OUTPUT
+            else
+              echo "label=Post-close" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "label=${{ inputs.label }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run screener
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          SCREENER_RUN_LABEL: ${{ steps.label.outputs.label }}
+        run: python run_screener.py
