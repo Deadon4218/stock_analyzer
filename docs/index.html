@@ -5,6 +5,7 @@
 <title>Stock Analyzer Performance</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
   * { box-sizing: border-box; }
   :root {
@@ -39,13 +40,42 @@
     align-items: flex-start;
     margin-bottom: 18px;
   }
-  h1 { margin: 0; font-size: 28px; letter-spacing: 0; }
+  h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-size: 28px;
+    letter-spacing: 0;
+  }
+  .icon {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: rgba(88,166,255,.15);
+    color: var(--blue);
+  }
   h2 { margin: 30px 0 8px; font-size: 19px; letter-spacing: 0; }
   h3 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
   p { margin: 0; }
   .subtitle { color: var(--muted); max-width: 760px; margin-top: 5px; font-size: 14px; }
   a { color: var(--blue); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  .top-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+  }
+  .control-label {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
   .tabs {
     display: inline-flex;
     overflow: hidden;
@@ -65,6 +95,29 @@
     font: inherit;
     font-size: 13px;
   }
+  .tabs.page-tabs button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 132px;
+  }
+  .tabs.page-tabs button svg,
+  .icon svg,
+  .panel-title svg,
+  .kpi-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  .fallback-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    font-size: 14px;
+    font-style: normal;
+    line-height: 1;
+  }
   .tabs button:last-child { border-right: 0; }
   .tabs button.active {
     background: var(--blue);
@@ -83,6 +136,16 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px 14px;
+  }
+  .status-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status-head svg {
+    width: 15px;
+    height: 15px;
+    color: var(--blue);
   }
   .status .label, .kpi .label {
     color: var(--muted);
@@ -112,11 +175,27 @@
     gap: 12px;
   }
   .kpi {
+    position: relative;
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 14px;
     min-height: 96px;
+  }
+  .kpi-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .kpi-icon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: rgba(88,166,255,.13);
+    color: var(--blue);
   }
   .kpi .value {
     margin-top: 6px;
@@ -158,6 +237,11 @@
     margin-bottom: 10px;
   }
   .panel-title { font-weight: 800; font-size: 15px; }
+  .panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
   .panel-subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
   .pill {
     display: inline-flex;
@@ -236,10 +320,18 @@
     text-align: center;
     margin-top: 34px;
   }
+  .page { display: none; }
+  .page.active { display: block; }
+  .page-kicker {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 14px;
+  }
   canvas { width: 100% !important; height: calc(100% - 52px) !important; }
   @media (max-width: 1000px) {
     .shell { padding: 20px 16px 36px; }
     header, .grid-main, .grid-two { grid-template-columns: 1fr; display: grid; }
+    .top-controls { align-items: stretch; }
     .status-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .tabs { width: 100%; }
@@ -256,119 +348,145 @@
 <main class="shell">
   <header>
     <div>
-      <h1>Stock Analyzer Performance</h1>
+      <h1><span class="icon"><i data-lucide="chart-no-axes-combined"></i></span>Stock Analyzer Performance</h1>
       <p class="subtitle">A simple control room for the trading bot: closed results first, open recommendations second, and clear reasons for every blocked or skipped setup.</p>
     </div>
-    <div class="tabs" id="modeTabs">
-      <button type="button" data-mode="signal" class="active">SIGNAL</button>
-      <button type="button" data-mode="scan">SCAN</button>
-      <button type="button" data-mode="all">ALL</button>
+    <div class="top-controls">
+      <div>
+        <div class="control-label">Dashboard page</div>
+        <div class="tabs page-tabs" id="pageTabs">
+          <button type="button" data-page="overview" class="active"><i data-lucide="layout-dashboard"></i>Overview</button>
+          <button type="button" data-page="open"><i data-lucide="list-checks"></i>Open Trades</button>
+          <button type="button" data-page="decisions"><i data-lucide="filter"></i>Decisions</button>
+          <button type="button" data-page="models"><i data-lucide="brain-circuit"></i>Models</button>
+        </div>
+      </div>
+      <div>
+        <div class="control-label">Data view</div>
+        <div class="tabs" id="modeTabs">
+          <button type="button" data-mode="signal" class="active">SIGNAL</button>
+          <button type="button" data-mode="scan">SCAN</button>
+          <button type="button" data-mode="all">ALL</button>
+        </div>
+      </div>
     </div>
   </header>
 
   <section class="status-strip" id="statusStrip"></section>
   <div class="note" id="modeNote"></div>
 
-  <section class="kpi-grid" id="kpis"></section>
+  <section class="page active" id="page-overview">
+    <section class="kpi-grid" id="kpis"></section>
 
-  <section class="grid-main">
-    <div class="panel chart-panel">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Cumulative R</div>
-          <div class="panel-subtitle">Closed ENTRY trades only. Open trades are not counted until TP/SL/expiry.</div>
+    <section class="grid-main">
+      <div class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title"><i data-lucide="trending-up"></i>Cumulative R</div>
+            <div class="panel-subtitle">Closed ENTRY trades only. Open trades are not counted until TP/SL/expiry.</div>
+          </div>
+          <span class="pill info" id="closedCountPill">0 closed</span>
         </div>
-        <span class="pill info" id="closedCountPill">0 closed</span>
+        <canvas id="cumulativeChart"></canvas>
       </div>
-      <canvas id="cumulativeChart"></canvas>
-    </div>
-    <div class="panel chart-panel">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Decision Funnel</div>
-          <div class="panel-subtitle">Where stocks stop before becoming measurable performance.</div>
+      <div class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title"><i data-lucide="funnel"></i>Decision Funnel</div>
+            <div class="panel-subtitle">Where stocks stop before becoming measurable performance.</div>
+          </div>
         </div>
+        <canvas id="funnelChart"></canvas>
       </div>
-      <canvas id="funnelChart"></canvas>
-    </div>
+    </section>
+
+    <h2>Closed Performance</h2>
+    <p class="page-kicker">This page shows measured performance only. Open trades are intentionally separated so they do not distort results.</p>
+    <section class="grid-two">
+      <div class="panel chart-panel short">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title"><i data-lucide="bar-chart-3"></i>Last Closed Recommendations</div>
+            <div class="panel-subtitle">Percent result from saved entry to TP/SL.</div>
+          </div>
+        </div>
+        <canvas id="closedReturnChart"></canvas>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title"><i data-lucide="table-2"></i>Closed Trades Table</div>
+            <div class="panel-subtitle">The rows that actually count in win rate and R.</div>
+          </div>
+        </div>
+        <div id="closedTable"></div>
+      </div>
+    </section>
   </section>
 
-  <h2>Closed Performance</h2>
-  <section class="grid-two">
-    <div class="panel chart-panel short">
+  <section class="page" id="page-open">
+    <h2>Open Recommendations</h2>
+    <p class="page-kicker">This page is for daily monitoring. These rows are live, but they are not counted in performance until they close.</p>
+    <section class="panel">
       <div class="panel-head">
         <div>
-          <div class="panel-title">Last Closed Recommendations</div>
-          <div class="panel-subtitle">Percent result from saved entry to TP/SL.</div>
+          <div class="panel-title"><i data-lucide="list-checks"></i>Live Tracking List</div>
+          <div class="panel-subtitle">ENTRY recommendations still waiting for TP, SL, or expiry.</div>
         </div>
+        <span class="pill pending" id="openCountPill">0 open</span>
       </div>
-      <canvas id="closedReturnChart"></canvas>
-    </div>
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Closed Trades Table</div>
-          <div class="panel-subtitle">The rows that actually count in win rate and R.</div>
-        </div>
-      </div>
-      <div id="closedTable"></div>
-    </div>
+      <div id="openTable"></div>
+    </section>
   </section>
 
-  <h2>Open Recommendations</h2>
-  <section class="panel">
-    <div class="panel-head">
-      <div>
-        <div class="panel-title">Live Tracking List</div>
-        <div class="panel-subtitle">These are ENTRY recommendations still waiting for TP, SL, or expiry.</div>
+  <section class="page" id="page-decisions">
+    <h2>Why Trades Did Not Enter</h2>
+    <p class="page-kicker">This page explains the decision pipeline: what became ENTRY, what stayed as SCAN, and what was blocked by risk rules.</p>
+    <section class="grid-two">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title"><i data-lucide="shield-x"></i>Blocked Reasons</div>
+            <div class="panel-subtitle">Risk rules that prevented an ENTRY.</div>
+          </div>
+        </div>
+        <div id="blockedReasons"></div>
       </div>
-      <span class="pill pending" id="openCountPill">0 open</span>
-    </div>
-    <div id="openTable"></div>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title"><i data-lucide="history"></i>Recent Decisions</div>
+            <div class="panel-subtitle">Every recent ticker with a plain reason.</div>
+          </div>
+        </div>
+        <div id="recentDecisions"></div>
+      </div>
+    </section>
   </section>
 
-  <h2>Why Trades Did Not Enter</h2>
-  <section class="grid-two">
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Blocked Reasons</div>
-          <div class="panel-subtitle">Risk rules that prevented an ENTRY.</div>
+  <section class="page" id="page-models">
+    <h2>Model Diagnostics</h2>
+    <p class="page-kicker">This page is for improving the algorithm: compare the AI ensemble, the classic rules engine, and per-agent accuracy.</p>
+    <section class="grid-two">
+      <div class="panel chart-panel short">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title"><i data-lucide="git-compare-arrows"></i>Final vs Classic</div>
+            <div class="panel-subtitle">Agreement is useful for research, not for daily performance by itself.</div>
+          </div>
         </div>
+        <canvas id="agreementChart"></canvas>
       </div>
-      <div id="blockedReasons"></div>
-    </div>
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Recent Decisions</div>
-          <div class="panel-subtitle">Every recent ticker with a plain reason.</div>
+      <div class="panel chart-panel short">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title"><i data-lucide="target"></i>Agent Accuracy</div>
+            <div class="panel-subtitle">Resolved outcomes only. Small samples are weak evidence.</div>
+          </div>
         </div>
+        <canvas id="agentAccuracyChart"></canvas>
       </div>
-      <div id="recentDecisions"></div>
-    </div>
-  </section>
-
-  <h2>Model Diagnostics</h2>
-  <section class="grid-two">
-    <div class="panel chart-panel short">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Final vs Classic</div>
-          <div class="panel-subtitle">Agreement is useful for research, not for daily performance by itself.</div>
-        </div>
-      </div>
-      <canvas id="agreementChart"></canvas>
-    </div>
-    <div class="panel chart-panel short">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Agent Accuracy</div>
-          <div class="panel-subtitle">Resolved outcomes only. Small samples are weak evidence.</div>
-        </div>
-      </div>
-      <canvas id="agentAccuracyChart"></canvas>
-    </div>
+    </section>
   </section>
 
   <p class="footer">
@@ -383,6 +501,7 @@ const HIGH_SCORE = 0.6;
 const LOW_SCORE = 0.4;
 let allRecords = [];
 let activeMode = "signal";
+let activePage = "overview";
 
 async function fetchText(url) {
   const response = await fetch(url + "?t=" + Date.now());
@@ -563,14 +682,17 @@ function renderStatus(records, stats) {
   const latestAll = allRecords.reduce((latest, record) => !latest || record.ts > latest ? record.ts : latest, "");
   const resolvedAll = allRecords.filter(isResolved).length;
   const cards = [
-    { label: "Selected View", value: activeMode.toUpperCase() },
-    { label: "Latest Analysis", value: formatDate(stats.latest || latestAll) },
-    { label: "Data Loaded", value: `${records.length} rows in view` },
-    { label: "Outcome Data", value: `${resolvedAll} resolved rows` },
+    { label: "Selected View", value: activeMode.toUpperCase(), icon: "database" },
+    { label: "Latest Analysis", value: formatDate(stats.latest || latestAll), icon: "clock-3" },
+    { label: "Data Loaded", value: `${records.length} rows in view`, icon: "file-bar-chart" },
+    { label: "Outcome Data", value: `${resolvedAll} resolved rows`, icon: "activity" },
   ];
   document.getElementById("statusStrip").innerHTML = cards.map(card => `
     <div class="status">
-      <div class="label">${card.label}</div>
+      <div class="status-head">
+        <i data-lucide="${card.icon}"></i>
+        <div class="label">${card.label}</div>
+      </div>
       <div class="value">${card.value}</div>
     </div>
   `).join("");
@@ -590,16 +712,19 @@ function renderKpis(stats) {
   const avgR = stats.avgR === null ? "-" : `${stats.avgR >= 0 ? "+" : ""}${stats.avgR.toFixed(2)}R`;
   const totalR = `${stats.totalR >= 0 ? "+" : ""}${stats.totalR.toFixed(2)}R`;
   const cards = [
-    { label: "Closed Trades", value: stats.closedCount, detail: "Only measured ENTRY results", tone: "neutral" },
-    { label: "Win Rate", value: winRate, detail: `${stats.winCount}/${stats.closedCount}`, tone: stats.winRate >= .5 ? "good" : "bad" },
-    { label: "Total R", value: totalR, detail: "Risk-normalized result", tone: stats.totalR >= 0 ? "good" : "bad" },
-    { label: "Avg R", value: avgR, detail: "Average closed trade", tone: stats.avgR >= 0 ? "good" : "bad" },
-    { label: "Open ENTRY", value: stats.openCount, detail: "Waiting for outcome", tone: "pending" },
-    { label: "Blocked", value: stats.blocked, detail: "Stopped by safety rules", tone: "bad" },
+    { label: "Closed Trades", value: stats.closedCount, detail: "Only measured ENTRY results", tone: "neutral", icon: "check-circle-2" },
+    { label: "Win Rate", value: winRate, detail: `${stats.winCount}/${stats.closedCount}`, tone: stats.winRate >= .5 ? "good" : "bad", icon: "trophy" },
+    { label: "Total R", value: totalR, detail: "Risk-normalized result", tone: stats.totalR >= 0 ? "good" : "bad", icon: "line-chart" },
+    { label: "Avg R", value: avgR, detail: "Average closed trade", tone: stats.avgR >= 0 ? "good" : "bad", icon: "gauge" },
+    { label: "Open ENTRY", value: stats.openCount, detail: "Waiting for outcome", tone: "pending", icon: "hourglass" },
+    { label: "Blocked", value: stats.blocked, detail: "Stopped by safety rules", tone: "bad", icon: "shield-x" },
   ];
   document.getElementById("kpis").innerHTML = cards.map(card => `
     <div class="kpi">
-      <div class="label">${card.label}</div>
+      <div class="kpi-top">
+        <div class="label">${card.label}</div>
+        <div class="kpi-icon"><i data-lucide="${card.icon}"></i></div>
+      </div>
       <div class="value ${card.tone}">${card.value}</div>
       <div class="detail">${card.detail}</div>
     </div>
@@ -980,10 +1105,55 @@ function updateTabs() {
   });
 }
 
+function updatePageTabs() {
+  document.querySelectorAll("#pageTabs button").forEach(button => {
+    button.classList.toggle("active", button.dataset.page === activePage);
+  });
+  document.querySelectorAll(".page").forEach(page => {
+    page.classList.toggle("active", page.id === `page-${activePage}`);
+  });
+}
+
+function renderIcons() {
+  if (window.lucide) {
+    window.lucide.createIcons();
+    return;
+  }
+  const fallbackIcons = {
+    "activity": "↯",
+    "bar-chart-3": "▥",
+    "brain-circuit": "◎",
+    "chart-no-axes-combined": "▦",
+    "check-circle-2": "✓",
+    "clock-3": "◷",
+    "database": "▤",
+    "file-bar-chart": "▧",
+    "filter": "⌯",
+    "funnel": "▽",
+    "gauge": "◒",
+    "git-compare-arrows": "⇄",
+    "history": "↺",
+    "hourglass": "⌛",
+    "layout-dashboard": "▦",
+    "line-chart": "↗",
+    "list-checks": "☑",
+    "shield-x": "⊗",
+    "target": "◎",
+    "trending-up": "↗",
+    "trophy": "★",
+  };
+  document.querySelectorAll("[data-lucide]").forEach(icon => {
+    const key = icon.getAttribute("data-lucide");
+    icon.textContent = fallbackIcons[key] || "•";
+    icon.classList.add("fallback-icon");
+  });
+}
+
 function renderDashboard() {
   const records = visibleRecords();
   const stats = computeStats(records);
   updateTabs();
+  updatePageTabs();
   renderStatus(records, stats);
   renderModeNote(stats);
   renderKpis(stats);
@@ -996,7 +1166,15 @@ function renderDashboard() {
   renderRecentDecisions(records);
   renderAgreement(records);
   renderAgentAccuracy(records);
+  renderIcons();
 }
+
+document.querySelectorAll("#pageTabs button").forEach(button => {
+  button.addEventListener("click", () => {
+    activePage = button.dataset.page;
+    renderDashboard();
+  });
+});
 
 document.querySelectorAll("#modeTabs button").forEach(button => {
   button.addEventListener("click", () => {
