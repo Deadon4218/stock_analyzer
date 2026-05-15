@@ -2,727 +2,453 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Stock Analyzer Dashboard</title>
+<title>Stock Analyzer Performance</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   * { box-sizing: border-box; }
+  :root {
+    --bg: #0d1117;
+    --panel: #151a21;
+    --panel-2: #10151c;
+    --border: #2d3540;
+    --text: #d6dde6;
+    --muted: #8f9aa8;
+    --blue: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --amber: #d29922;
+    --violet: #a371f7;
+  }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #0d1117;
-    color: #c9d1d9;
     margin: 0;
-    padding: 24px;
-    max-width: 1280px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.45;
+  }
+  .shell {
+    width: min(1440px, 100%);
     margin: 0 auto;
-    line-height: 1.5;
+    padding: 28px 32px 44px;
   }
-  h1 { margin: 0 0 4px; font-size: 28px; }
-  .subtitle { color: #8b949e; margin: 0 0 24px; }
-  h2 { margin-top: 36px; font-size: 20px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
-  h3 { margin: 0 0 8px; font-size: 16px; }
-  .section-note { color: #8b949e; font-size: 13px; margin: -4px 0 12px; }
-  .guide-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-    margin: 0 0 26px;
-  }
-  .guide-card {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    padding: 14px 16px;
-  }
-  .guide-card strong {
-    display: block;
-    color: #c9d1d9;
-    font-size: 14px;
-    margin-bottom: 4px;
-  }
-  .guide-card span { color: #8b949e; font-size: 13px; }
-  .toolbar {
+  header {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 0 0 24px;
-    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 20px;
+    align-items: flex-start;
+    margin-bottom: 18px;
   }
-  .segmented {
+  h1 { margin: 0; font-size: 28px; letter-spacing: 0; }
+  h2 { margin: 30px 0 8px; font-size: 19px; letter-spacing: 0; }
+  h3 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
+  p { margin: 0; }
+  .subtitle { color: var(--muted); max-width: 760px; margin-top: 5px; font-size: 14px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .tabs {
     display: inline-flex;
-    border: 1px solid #30363d;
-    border-radius: 8px;
     overflow: hidden;
-    background: #161b22;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    flex-shrink: 0;
   }
-  .segmented button {
-    min-width: 88px;
-    height: 36px;
+  .tabs button {
+    min-width: 110px;
+    height: 38px;
     border: 0;
-    border-right: 1px solid #30363d;
+    border-right: 1px solid var(--border);
     background: transparent;
-    color: #8b949e;
+    color: var(--muted);
+    cursor: pointer;
     font: inherit;
     font-size: 13px;
-    cursor: pointer;
   }
-  .segmented button:last-child { border-right: 0; }
-  .segmented button.active {
-    background: #1f6feb;
+  .tabs button:last-child { border-right: 0; }
+  .tabs button.active {
+    background: var(--blue);
     color: #fff;
-    font-weight: 600;
+    font-weight: 700;
   }
-  .notice {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-left: 4px solid #58a6ff;
+  .status-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    gap: 10px;
+    margin: 18px 0 16px;
+  }
+  .status {
+    min-height: 66px;
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    color: #c9d1d9;
-    font-size: 14px;
-    margin: -8px 0 24px;
     padding: 12px 14px;
   }
-  .notice strong { color: #58a6ff; }
-  .notice.compact { margin: 0 0 14px; }
-
-  .grid {
+  .status .label, .kpi .label {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .status .value {
+    margin-top: 4px;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .note {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--blue);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  .note strong { color: var(--text); }
+  .kpi-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(6, minmax(140px, 1fr));
     gap: 12px;
   }
-  .card {
-    background: #161b22;
-    border: 1px solid #30363d;
+  .kpi {
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 14px 16px;
+    padding: 14px;
+    min-height: 96px;
   }
-  .card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.4px; }
-  .card .value { font-size: 26px; font-weight: 600; color: #58a6ff; margin-top: 4px; }
-  .card .detail { color: #8b949e; font-size: 12px; margin-top: 2px; }
-
-  .agent-grid {
+  .kpi .value {
+    margin-top: 6px;
+    font-size: 28px;
+    font-weight: 800;
+  }
+  .kpi .detail {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 3px;
+  }
+  .value.good { color: var(--green); }
+  .value.bad { color: var(--red); }
+  .value.neutral { color: var(--blue); }
+  .value.pending { color: var(--amber); }
+  .grid-main {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    grid-template-columns: minmax(0, 1.55fr) minmax(360px, .95fr);
     gap: 14px;
   }
-  .agent-card {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    padding: 14px 16px;
-    border-left: 4px solid #58a6ff;
+  .grid-two {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
   }
-  .agent-card.bear { border-left-color: #f85149; }
-  .agent-card.bull { border-left-color: #3fb950; }
-  .agent-name { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
-  .agent-meta { font-size: 12px; color: #8b949e; margin-bottom: 8px; }
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 500;
-    background: #21262d;
-    color: #c9d1d9;
-    margin-right: 6px;
-  }
-  .badge.bull { background: rgba(63, 185, 80, 0.2); color: #3fb950; }
-  .badge.bear { background: rgba(248, 81, 73, 0.2); color: #f85149; }
-  .agent-prompt { font-size: 13px; color: #c9d1d9; line-height: 1.55; }
-  .agent-stat { font-size: 12px; color: #8b949e; margin-top: 8px; }
-
-  .strategy-card {
-    background: #161b22;
-    border: 1px solid #30363d;
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 16px;
   }
-  .strategy-card .label { font-size: 13px; font-weight: 600; color: #58a6ff; margin-bottom: 4px; }
-  .strategy-card .desc { font-size: 13px; color: #8b949e; }
-  .strategy-card .count { font-size: 12px; color: #6e7681; margin-top: 6px; }
-
-  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
-  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #21262d; }
-  th { background: #161b22; color: #8b949e; font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
-  td.num { font-variant-numeric: tabular-nums; text-align: right; }
-  .table-wrap {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    height: 360px;
-    overflow: auto;
-    padding: 4px 0 10px;
+  .chart-panel { height: 390px; }
+  .chart-panel.short { height: 330px; }
+  .panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 10px;
   }
-  .table-wrap table { margin-top: 0; }
-
-  .verdict-entry { color: #3fb950; font-weight: 600; }
-  .verdict-skip { color: #f85149; }
-  .mode-signal { color: #58a6ff; font-weight: 600; }
-  .mode-scan { color: #d29922; font-weight: 600; }
-  .state-good { color: #3fb950; font-weight: 600; }
-  .state-bad { color: #f85149; font-weight: 600; }
-  .state-muted { color: #8b949e; }
-  .outcome-tp { color: #3fb950; }
-  .outcome-sl { color: #f85149; }
-  .outcome-open { color: #d29922; }
-  .outcome-expired { color: #6e7681; }
-  .status-pill {
-    display: inline-block;
+  .panel-title { font-weight: 800; font-size: 15px; }
+  .panel-subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 2px 9px;
     border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 700;
     white-space: nowrap;
   }
-  .status-entry { background: rgba(63, 185, 80, 0.18); color: #3fb950; }
-  .status-open { background: rgba(210, 153, 34, 0.18); color: #d29922; }
-  .status-blocked { background: rgba(248, 81, 73, 0.18); color: #f85149; }
-  .status-scan { background: rgba(88, 166, 255, 0.16); color: #58a6ff; }
-  .status-skip { background: rgba(139, 148, 158, 0.16); color: #8b949e; }
-
-  .chart-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
-    gap: 14px;
-  }
-  .chart-wrap {
-    background: #161b22;
-    padding: 16px;
-    border-radius: 8px;
-    border: 1px solid #30363d;
-    height: 360px;
-  }
-  .empty {
-    background: #161b22;
-    border: 1px dashed #30363d;
-    border-radius: 8px;
-    padding: 28px;
-    text-align: center;
-    color: #8b949e;
+  .pill.good { color: var(--green); background: rgba(63,185,80,.16); }
+  .pill.bad { color: var(--red); background: rgba(248,81,73,.15); }
+  .pill.pending { color: var(--amber); background: rgba(210,153,34,.16); }
+  .pill.info { color: var(--blue); background: rgba(88,166,255,.15); }
+  .pill.muted { color: var(--muted); background: rgba(143,154,168,.13); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
     font-size: 13px;
   }
-  .footer { color: #6e7681; font-size: 12px; margin-top: 48px; text-align: center; }
-  a { color: #58a6ff; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-
-  details summary { cursor: pointer; font-size: 13px; color: #8b949e; padding: 4px 0; }
-  details summary:hover { color: #c9d1d9; }
+  th, td {
+    padding: 9px 10px;
+    border-bottom: 1px solid #222a34;
+    text-align: left;
+    vertical-align: middle;
+  }
+  th {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    font-weight: 700;
+    background: var(--panel-2);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .scroll {
+    overflow: auto;
+    max-height: 350px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .empty {
+    display: grid;
+    place-items: center;
+    min-height: 220px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    text-align: center;
+    padding: 24px;
+    font-size: 13px;
+  }
+  .reason-list {
+    display: grid;
+    gap: 10px;
+  }
+  .reason-row {
+    display: grid;
+    grid-template-columns: minmax(160px, .8fr) 1fr auto;
+    gap: 12px;
+    align-items: center;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .reason-name { font-weight: 800; }
+  .reason-help { color: var(--muted); font-size: 13px; }
+  .footer {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    margin-top: 34px;
+  }
+  canvas { width: 100% !important; height: calc(100% - 52px) !important; }
+  @media (max-width: 1000px) {
+    .shell { padding: 20px 16px 36px; }
+    header, .grid-main, .grid-two { grid-template-columns: 1fr; display: grid; }
+    .status-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tabs { width: 100%; }
+    .tabs button { flex: 1; min-width: 0; }
+  }
+  @media (max-width: 620px) {
+    .status-strip, .kpi-grid { grid-template-columns: 1fr; }
+    .reason-row { grid-template-columns: 1fr; }
+    .chart-panel { height: 340px; }
+  }
 </style>
 </head>
 <body>
+<main class="shell">
+  <header>
+    <div>
+      <h1>Stock Analyzer Performance</h1>
+      <p class="subtitle">A simple control room for the trading bot: closed results first, open recommendations second, and clear reasons for every blocked or skipped setup.</p>
+    </div>
+    <div class="tabs" id="modeTabs">
+      <button type="button" data-mode="signal" class="active">SIGNAL</button>
+      <button type="button" data-mode="scan">SCAN</button>
+      <button type="button" data-mode="all">ALL</button>
+    </div>
+  </header>
 
-<h1>📊 Stock Analyzer Dashboard</h1>
-<p class="subtitle">6 AI evidence lenses + 1 classic rules engine, directional p_up scoring, 67% threshold for entry. <a href="https://github.com/Deadon4218/stock_analyzer" target="_blank">View source</a></p>
+  <section class="status-strip" id="statusStrip"></section>
+  <div class="note" id="modeNote"></div>
 
-<div class="guide-grid">
-  <div class="guide-card"><strong>SIGNAL</strong><span>Trade setups parsed from Discord. Use this as the main performance view.</span></div>
-  <div class="guide-card"><strong>SCAN</strong><span>Watchlist checks. These are market reads, not entry recommendations.</span></div>
-  <div class="guide-card"><strong>Classic vs Final</strong><span>Compares the deterministic rules engine with the final combined probability.</span></div>
-  <div class="guide-card"><strong>Blocked</strong><span>Shows setups rejected by safety rules such as stale entry or low R:R.</span></div>
-</div>
+  <section class="kpi-grid" id="kpis"></section>
 
-<div class="toolbar">
-  <div class="segmented" id="modeTabs">
-    <button type="button" data-mode="signal" class="active">SIGNAL</button>
-    <button type="button" data-mode="scan">SCAN</button>
-    <button type="button" data-mode="all">ALL</button>
-  </div>
-</div>
-<div id="modeExplanation" class="notice"></div>
+  <section class="grid-main">
+    <div class="panel chart-panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Cumulative R</div>
+          <div class="panel-subtitle">Closed ENTRY trades only. Open trades are not counted until TP/SL/expiry.</div>
+        </div>
+        <span class="pill info" id="closedCountPill">0 closed</span>
+      </div>
+      <canvas id="cumulativeChart"></canvas>
+    </div>
+    <div class="panel chart-panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Decision Funnel</div>
+          <div class="panel-subtitle">Where stocks stop before becoming measurable performance.</div>
+        </div>
+      </div>
+      <canvas id="funnelChart"></canvas>
+    </div>
+  </section>
 
-<h2>1. Performance Overview</h2>
-<p class="section-note">Numbers in this section follow the selected tab. ENTRY counts every active recommendation; win rate uses only ENTRY rows already resolved to TP/SL/expired.</p>
-<div class="grid" id="kpis"></div>
+  <h2>Closed Performance</h2>
+  <section class="grid-two">
+    <div class="panel chart-panel short">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Last Closed Recommendations</div>
+          <div class="panel-subtitle">Percent result from saved entry to TP/SL.</div>
+        </div>
+      </div>
+      <canvas id="closedReturnChart"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Closed Trades Table</div>
+          <div class="panel-subtitle">The rows that actually count in win rate and R.</div>
+        </div>
+      </div>
+      <div id="closedTable"></div>
+    </div>
+  </section>
 
-<h2>2. All Stocks Flow</h2>
-<p class="section-note">This shows every ticker in the selected tab. The performance charts below use only rows whose verdict is ENTRY.</p>
-<div class="chart-grid">
-  <div class="chart-wrap" id="decisionFlowWrap"><canvas id="decisionFlowChart"></canvas></div>
-  <div class="table-wrap" id="stockFlowContainer"></div>
-</div>
+  <h2>Open Recommendations</h2>
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Live Tracking List</div>
+        <div class="panel-subtitle">These are ENTRY recommendations still waiting for TP, SL, or expiry.</div>
+      </div>
+      <span class="pill pending" id="openCountPill">0 open</span>
+    </div>
+    <div id="openTable"></div>
+  </section>
 
-<h2>3. Recommendation Performance</h2>
-<p class="section-note">Only closed ENTRY recommendations are shown in the two performance charts. Open recommendations are listed separately below because they do not have a result yet.</p>
-<div id="recommendationSummary" class="notice compact"></div>
-<div class="chart-grid">
-  <div class="chart-wrap" id="recommendationReturnsWrap"><canvas id="recommendationReturnsChart"></canvas></div>
-  <div class="chart-wrap" id="cumulativeRWrap"><canvas id="cumulativeRChart"></canvas></div>
-</div>
-<div id="openEntriesContainer"></div>
+  <h2>Why Trades Did Not Enter</h2>
+  <section class="grid-two">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Blocked Reasons</div>
+          <div class="panel-subtitle">Risk rules that prevented an ENTRY.</div>
+        </div>
+      </div>
+      <div id="blockedReasons"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Recent Decisions</div>
+          <div class="panel-subtitle">Every recent ticker with a plain reason.</div>
+        </div>
+      </div>
+      <div id="recentDecisions"></div>
+    </div>
+  </section>
 
-<h2>4. Model Agreement</h2>
-<p class="section-note">This compares the final combined model with the classic rules engine. The strongest setups are usually where both point in the same direction.</p>
-<div class="chart-grid">
-  <div class="chart-wrap" id="agreementScatterWrap"><canvas id="agreementScatterChart"></canvas></div>
-  <div class="chart-wrap" id="consensusWinRateWrap"><canvas id="consensusWinRateChart"></canvas></div>
-</div>
+  <h2>Model Diagnostics</h2>
+  <section class="grid-two">
+    <div class="panel chart-panel short">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Final vs Classic</div>
+          <div class="panel-subtitle">Agreement is useful for research, not for daily performance by itself.</div>
+        </div>
+      </div>
+      <canvas id="agreementChart"></canvas>
+    </div>
+    <div class="panel chart-panel short">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Agent Accuracy</div>
+          <div class="panel-subtitle">Resolved outcomes only. Small samples are weak evidence.</div>
+        </div>
+      </div>
+      <canvas id="agentAccuracyChart"></canvas>
+    </div>
+  </section>
 
-<h2>5. Blocked Reasons</h2>
-<p class="section-note">Blocked means the model may have liked the setup, but a safety rule prevented ENTRY. It does not mean the stock is bad; it means the trade plan failed a risk check.</p>
-<div id="blockedContainer"></div>
-
-<h2>6. Classic vs Final</h2>
-<p class="section-note">Final is the combined probability. Classic is the non-AI rules engine. Large gaps deserve review.</p>
-<div id="classicContainer"></div>
-
-<h2>7. Recent Analyses</h2>
-<p class="section-note">The latest records in the selected view, including mode, direction, probabilities, levels, and outcome.</p>
-<div id="recentContainer"></div>
-
-<h2>8. Accuracy By Strategy</h2>
-<p class="section-note">Resolved outcomes only. Treat small sample sizes as weak evidence.</p>
-<div id="strategyChartContainer"></div>
-
-<h2>9. Accuracy By Lens</h2>
-<p class="section-note">Resolved outcomes only. This helps identify which lens is adding useful signal.</p>
-<div id="agentChartContainer"></div>
-
-<h2>10. Lens Activity</h2>
-<p class="section-note">Average p_up shows bias. Accuracy above is the better measure of quality.</p>
-<div class="chart-wrap" id="agentScoresWrap"><canvas id="agentScoresChart"></canvas></div>
-
-<h2>11. Strategy Types</h2>
-<div class="agent-grid" id="strategies"></div>
-
-<h2>12. Evidence Lens Roster</h2>
-<div class="agent-grid" id="agentRoster"></div>
-
-<p class="footer">
-  Data: <a href="https://github.com/Deadon4218/stock_analyzer/blob/main/data/analyses.jsonl" target="_blank">analyses.jsonl</a>
-  · Built on GitHub Actions · $0/month
-</p>
+  <p class="footer">
+    Data source: <a href="https://github.com/Deadon4218/stock_analyzer/blob/main/data/analyses.jsonl" target="_blank">analyses.jsonl</a>
+  </p>
+</main>
 
 <script>
 const REPO = "Deadon4218/stock_analyzer";
 const ANALYSES_URL = `https://raw.githubusercontent.com/${REPO}/main/data/analyses.jsonl`;
-const AGENTS_URL = `https://raw.githubusercontent.com/${REPO}/main/data/agents.json`;
 const HIGH_SCORE = 0.6;
 const LOW_SCORE = 0.4;
 let allRecords = [];
-let allAgentsData = { agents: [], strategies: {} };
 let activeMode = "signal";
 
 async function fetchText(url) {
-  const r = await fetch(url + "?t=" + Date.now());
-  if (!r.ok) throw new Error(url + " → " + r.status);
-  return await r.text();
+  const response = await fetch(url + "?t=" + Date.now());
+  if (!response.ok) throw new Error(`${url} ${response.status}`);
+  return response.text();
 }
 
 async function loadAnalyses() {
   try {
-    const t = await fetchText(ANALYSES_URL);
-    return t.trim().split("\n").filter(l => l).map(l => JSON.parse(l));
-  } catch { return []; }
+    const text = await fetchText(ANALYSES_URL);
+    return text.trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
 }
 
-async function loadAgents() {
-  try {
-    const t = await fetchText(AGENTS_URL);
-    return JSON.parse(t);
-  } catch { return { agents: [], strategies: {} }; }
-}
-
-function isResolved(r) { return ["tp_hit", "sl_hit", "expired"].includes(r.outcome); }
-
-function recordMode(r) {
-  if (r.analysis_mode) return r.analysis_mode;
-  if (r.source === "personal" || r.source === "manual") return "scan";
+function recordMode(record) {
+  if (record.analysis_mode) return record.analysis_mode;
+  if (record.source === "personal" || record.source === "manual") return "scan";
   return "signal";
 }
 
 function visibleRecords() {
   if (activeMode === "all") return allRecords;
-  return allRecords.filter(r => recordMode(r) === activeMode);
+  return allRecords.filter(record => recordMode(record) === activeMode);
 }
 
-function formatRate(wins, total) {
-  if (!total) return { value: "—", detail: "0/0" };
-  return { value: (wins / total * 100).toFixed(1) + "%", detail: `${wins}/${total}` };
+function isResolved(record) {
+  return ["tp_hit", "sl_hit", "expired"].includes(record.outcome);
 }
 
-function fmtPct(v, digits = 1) {
-  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
-  return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
+function entries(records) {
+  return records.filter(record => record.verdict === "ENTRY");
 }
 
-function fmtMoney(v) {
-  return typeof v === "number" && Number.isFinite(v) ? `$${v.toFixed(2)}` : "—";
+function closedEntries(records) {
+  return entries(records).filter(isResolved);
+}
+
+function openEntries(records) {
+  return entries(records).filter(record => !isResolved(record));
+}
+
+function formatPct(value, digits = 1) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;
+}
+
+function formatMoney(value) {
+  return typeof value === "number" && Number.isFinite(value) ? `$${value.toFixed(2)}` : "-";
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  return value.slice(0, 16).replace("T", " ");
 }
 
 function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, c => ({
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#039;",
-  }[c]));
-}
-
-function tradeReturnPct(record) {
-  if (!isResolved(record)) return null;
-  if (typeof record.return_pct === "number") return record.return_pct;
-  const entry = record.entry;
-  const tp = record.take_profit;
-  const sl = record.stop_loss;
-  if (!entry || !tp || !sl) return null;
-  const direction = record.direction || "long";
-  if (record.outcome === "tp_hit") {
-    return direction === "short" ? ((entry - tp) / entry) * 100 : ((tp - entry) / entry) * 100;
-  }
-  if (record.outcome === "sl_hit") {
-    return direction === "short" ? ((entry - sl) / entry) * 100 : ((sl - entry) / entry) * 100;
-  }
-  return 0;
-}
-
-function tradeR(record) {
-  if (!isResolved(record)) return null;
-  if (record.outcome === "tp_hit") {
-    return typeof record.rr_ratio === "number" ? record.rr_ratio : 1;
-  }
-  if (record.outcome === "sl_hit") return -1;
-  return 0;
-}
-
-function entryRecommendations(records) {
-  return records
-    .filter(r => r.verdict === "ENTRY")
-    .slice(-20);
-}
-
-function aiAveragePUp(record) {
-  const values = (record.agents || [])
-    .filter(a => a.name !== "Classic Technical")
-    .map(a => typeof a.p_up === "number" ? a.p_up : a.score)
-    .filter(v => typeof v === "number" && Number.isFinite(v));
-  if (!values.length) return null;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
-}
-
-function finalDirectionScore(record) {
-  const direction = record.direction || "long";
-  const pUp = typeof record.bull_prob === "number" ? record.bull_prob : aiAveragePUp(record);
-  if (typeof pUp !== "number") return null;
-  return direction === "short" ? 1 - pUp : pUp;
-}
-
-function classicDirectionScore(record) {
-  if (typeof record.classic_p_up !== "number") return null;
-  return (record.direction || "long") === "short" ? 1 - record.classic_p_up : record.classic_p_up;
-}
-
-function hasModelConsensus(record) {
-  const finalScore = finalDirectionScore(record);
-  const classicScore = classicDirectionScore(record);
-  if (finalScore === null || classicScore === null) return null;
-  return finalScore >= 0.67 && classicScore >= 0.67;
-}
-
-function computeKpis(records) {
-  const resolved = records.filter(isResolved);
-  const entries = records.filter(r => r.verdict === "ENTRY");
-  const resolvedEntries = entries.filter(isResolved);
-  const wins = resolvedEntries.filter(r => r.outcome === "tp_hit");
-  const winRate = formatRate(wins.length, resolvedEntries.length);
-  const blocked = records.filter(r => (r.entry_block_reasons || []).length).length;
-  return {
-    total: records.length,
-    resolved: resolved.length,
-    open: records.filter(r => !isResolved(r)).length,
-    entries: entries.length,
-    openEntries: entries.filter(r => !isResolved(r)).length,
-    resolvedEntries: resolvedEntries.length,
-    wins: wins.length,
-    winRate,
-    blocked,
-    classic: records.filter(r => typeof r.classic_p_up === "number").length,
-  };
-}
-
-function renderKpis(k) {
-  const cards = [
-    { label: "Total Analyses", value: k.total },
-    { label: "Resolved", value: k.resolved },
-    { label: "Pending", value: k.open },
-    { label: "ENTRY Recommendations", value: k.entries, detail: `${k.openEntries} open · ${k.resolvedEntries} resolved` },
-    { label: "Wins", value: k.wins },
-    { label: "Win Rate", value: k.winRate.value, detail: k.winRate.detail },
-    { label: "Blocked", value: k.blocked },
-    { label: "Classic Scored", value: k.classic },
-  ];
-  document.getElementById("kpis").innerHTML = cards.map(c =>
-    `<div class="card"><div class="label">${c.label}</div><div class="value">${c.value}</div>${c.detail ? `<div class="detail">${c.detail}</div>` : ""}</div>`
-  ).join("");
-}
-
-function renderModeExplanation(records) {
-  const entries = records.filter(r => r.verdict === "ENTRY").length;
-  const resolvedEntries = records.filter(r => r.verdict === "ENTRY" && isResolved(r)).length;
-  const text = {
-    signal: `<strong>SIGNAL</strong> shows Discord trade alerts. There are ${entries} ENTRY recommendations here; ${resolvedEntries} already have a resolved result, and the rest are still open.`,
-    scan: `<strong>SCAN</strong> shows watchlist/manual checks. These are intentionally not trade recommendations, so ENTRY performance is empty here. Use SIGNAL for real recommendation performance, or ALL to see everything together.`,
-    all: `<strong>ALL</strong> mixes SIGNAL recommendations with SCAN watchlist checks. It is useful for inspection, but SIGNAL is the cleaner view for trade performance.`,
-  }[activeMode];
-  document.getElementById("modeExplanation").innerHTML = text || "";
-}
-
-function chartTextColor() { return "#c9d1d9"; }
-function chartGridColor() { return "#21262d"; }
-
-function setEmpty(containerId, text) {
-  document.getElementById(containerId).innerHTML = `<div class="empty">${text}</div>`;
-}
-
-function canvasIn(containerId, canvasId) {
-  const c = document.getElementById(containerId);
-  Chart.getChart(canvasId)?.destroy();
-  c.innerHTML = `<canvas id="${canvasId}"></canvas>`;
-  return document.getElementById(canvasId).getContext("2d");
-}
-
-function stockStatus(record) {
-  const blocked = (record.entry_block_reasons || []).length > 0;
-  if (record.verdict === "ENTRY") {
-    if (!isResolved(record)) return { label: "Open ENTRY", cls: "status-open", reason: "Waiting for TP/SL/expiry outcome." };
-    if (record.outcome === "tp_hit") return { label: "ENTRY win", cls: "status-entry", reason: `${fmtPct(tradeReturnPct(record))} from entry to TP.` };
-    if (record.outcome === "sl_hit") return { label: "ENTRY loss", cls: "status-blocked", reason: `${fmtPct(tradeReturnPct(record))} from entry to SL.` };
-    return { label: "Expired", cls: "status-skip", reason: "Trade expired before TP/SL." };
-  }
-  if (blocked) {
-    return { label: "Blocked", cls: "status-blocked", reason: (record.entry_block_reasons || []).join(" · ") };
-  }
-  if (recordMode(record) === "scan") {
-    return { label: "Scan only", cls: "status-scan", reason: "Watchlist check, not a trade signal." };
-  }
-  const score = finalDirectionScore(record);
-  return {
-    label: "SKIP",
-    cls: "status-skip",
-    reason: typeof score === "number" ? `Direction score ${(score * 100).toFixed(0)}% did not become ENTRY.` : "No entry recommendation.",
-  };
-}
-
-function decisionBuckets(records) {
-  const buckets = {
-    openEntry: { label: "Open ENTRY", count: 0, color: "#d29922" },
-    resolvedEntry: { label: "Resolved ENTRY", count: 0, color: "#3fb950" },
-    blocked: { label: "Blocked", count: 0, color: "#f85149" },
-    scanOnly: { label: "SCAN only", count: 0, color: "#58a6ff" },
-    otherSkip: { label: "Other SKIP", count: 0, color: "#8b949e" },
-  };
-  for (const r of records) {
-    if (r.verdict === "ENTRY" && isResolved(r)) buckets.resolvedEntry.count++;
-    else if (r.verdict === "ENTRY") buckets.openEntry.count++;
-    else if ((r.entry_block_reasons || []).length) buckets.blocked.count++;
-    else if (recordMode(r) === "scan") buckets.scanOnly.count++;
-    else buckets.otherSkip.count++;
-  }
-  return Object.values(buckets);
-}
-
-function renderDecisionFlow(records) {
-  const buckets = decisionBuckets(records);
-  const ctx = canvasIn("decisionFlowWrap", "decisionFlowChart");
-  new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels: buckets.map(b => b.label),
-      datasets: [{
-        label: "Stocks",
-        data: buckets.map(b => b.count),
-        backgroundColor: buckets.map(b => b.color),
-      }],
-    },
-    options: {
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: chartTextColor() }, grid: { display: false } },
-        y: { beginAtZero: true, ticks: { color: chartTextColor(), precision: 0 }, grid: { color: chartGridColor() } },
-      },
-    },
-  });
-}
-
-function renderStockFlow(records) {
-  const c = document.getElementById("stockFlowContainer");
-  if (!records.length) {
-    c.innerHTML = `<div class="empty">No stocks in this view.</div>`;
-    return;
-  }
-  const rows = records.slice(-60).reverse();
-  c.innerHTML = `
-    <table>
-      <thead>
-        <tr><th>Date</th><th>Ticker</th><th>Mode</th><th>Status</th><th class="num">Final</th><th class="num">Classic</th><th>Why</th></tr>
-      </thead>
-      <tbody>
-        ${rows.map(r => {
-          const status = stockStatus(r);
-          return `
-            <tr>
-              <td>${escapeHtml(r.ts ? r.ts.slice(0, 16).replace("T", " ") : "")}</td>
-              <td><strong>${escapeHtml(r.ticker)}</strong></td>
-              <td class="mode-${recordMode(r)}">${recordMode(r).toUpperCase()}</td>
-              <td><span class="status-pill ${status.cls}">${status.label}</span></td>
-              <td class="num">${typeof r.bull_prob === "number" ? (r.bull_prob * 100).toFixed(0) + "%" : "—"}</td>
-              <td class="num">${typeof r.classic_p_up === "number" ? (r.classic_p_up * 100).toFixed(0) + "%" : "—"}</td>
-              <td>${escapeHtml(status.reason)}</td>
-            </tr>
-          `;
-        }).join("")}
-      </tbody>
-    </table>
-  `;
-}
-
-function renderRecommendationPerformance(records) {
-  const entries = entryRecommendations(records);
-  const resolvedEntries = entries.filter(isResolved);
-  const openEntries = entries.filter(r => !isResolved(r));
-  renderRecommendationSummary(entries, resolvedEntries, openEntries);
-  renderOpenEntries(openEntries);
-
-  if (!entries.length) {
-    const reason = activeMode === "scan"
-      ? "SCAN rows are watchlist checks, so they do not create ENTRY recommendations. Switch to SIGNAL or ALL to see trade recommendations."
-      : "No ENTRY recommendations yet in this view. A ticker must pass the 67% threshold and safety rules before it appears here.";
-    setEmpty("recommendationReturnsWrap", reason);
-    setEmpty("cumulativeRWrap", reason);
-    return;
-  }
-  if (!resolvedEntries.length) {
-    setEmpty("recommendationReturnsWrap", "There are ENTRY recommendations, but none have reached TP/SL/expiry yet. The result chart will appear after the outcome tracker closes at least one.");
-    setEmpty("cumulativeRWrap", "No closed ENTRY trades yet, so there is no cumulative R to plot.");
-    return;
-  }
-
-  const labels = resolvedEntries.map(r => `${r.ticker} ${r.ts ? r.ts.slice(5, 10) : ""}`);
-  const returns = resolvedEntries.map(tradeReturnPct);
-  const rValues = resolvedEntries.map(tradeR);
-  const colors = returns.map(v => v >= 0 ? "#3fb950" : "#f85149");
-  const ctx = canvasIn("recommendationReturnsWrap", "recommendationReturnsChart");
-  new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        label: "Closed trade return",
-        data: returns,
-        backgroundColor: colors,
-      }],
-    },
-    options: {
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: chartTextColor() } },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const r = resolvedEntries[ctx.dataIndex];
-              const pct = tradeReturnPct(r);
-              const levels = `entry ${fmtMoney(r.entry)} / TP ${fmtMoney(r.take_profit)} / SL ${fmtMoney(r.stop_loss)}`;
-              return `${fmtPct(pct)} | ${outcomeLabel(r.outcome)} | ${levels}`;
-            },
-          },
-        },
-      },
-      scales: {
-        x: { ticks: { color: chartTextColor(), maxRotation: 45, minRotation: 0 }, grid: { display: false } },
-        y: { ticks: { color: chartTextColor(), callback: v => v + "%" }, grid: { color: chartGridColor() } },
-      },
-    },
-  });
-
-  let cumulative = 0;
-  const cumulativeR = rValues.map(v => {
-    cumulative += v;
-    return +cumulative.toFixed(2);
-  });
-  const ctxR = canvasIn("cumulativeRWrap", "cumulativeRChart");
-  new Chart(ctxR, {
-    type: "line",
-    data: {
-      labels,
-      datasets: [{
-        label: "Cumulative R",
-        data: cumulativeR,
-        borderColor: "#58a6ff",
-        backgroundColor: "rgba(88, 166, 255, 0.18)",
-        pointBackgroundColor: rValues.map(v => v === null ? "#6e7681" : v >= 0 ? "#3fb950" : "#f85149"),
-        tension: 0.25,
-        spanGaps: true,
-      }],
-    },
-    options: {
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: chartTextColor() } },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const r = resolvedEntries[ctx.dataIndex];
-              const rValue = tradeR(r);
-              return `${rValue >= 0 ? "+" : ""}${rValue.toFixed(2)}R on ${r.ticker}`;
-            },
-          },
-        },
-      },
-      scales: {
-        x: { ticks: { color: chartTextColor(), maxRotation: 45, minRotation: 0 }, grid: { display: false } },
-        y: { ticks: { color: chartTextColor(), callback: v => v + "R" }, grid: { color: chartGridColor() } },
-      },
-    },
-  });
-}
-
-function renderRecommendationSummary(entries, resolvedEntries, openEntries) {
-  const wins = resolvedEntries.filter(r => r.outcome === "tp_hit").length;
-  const losses = resolvedEntries.filter(r => r.outcome === "sl_hit").length;
-  const unresolvedText = openEntries.length
-    ? `${openEntries.length} still open and waiting for TP/SL.`
-    : "No open ENTRY recommendations in this view.";
-  const measuredText = resolvedEntries.length
-    ? `${resolvedEntries.length} closed recommendations: ${wins} TP, ${losses} SL.`
-    : "No closed ENTRY recommendations yet.";
-  document.getElementById("recommendationSummary").innerHTML =
-    `<strong>${entries.length} ENTRY recommendations</strong> in this tab. ${measuredText} ${unresolvedText}`;
-}
-
-function renderOpenEntries(openEntries) {
-  const c = document.getElementById("openEntriesContainer");
-  if (!openEntries.length) {
-    c.innerHTML = "";
-    return;
-  }
-  const rows = openEntries.slice().reverse();
-  c.innerHTML = `
-    <h3 style="margin-top:18px">Open Recommendations</h3>
-    <p class="section-note">These are not counted in performance yet. They are waiting for the outcome tracker to mark TP, SL, or expired.</p>
-    <div class="table-wrap" style="height:auto; max-height:320px">
-      <table>
-        <thead>
-          <tr><th>Date</th><th>Ticker</th><th>Dir</th><th class="num">Final</th><th class="num">Classic</th><th class="num">Entry</th><th class="num">TP</th><th class="num">SL</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          ${rows.map(r => `
-            <tr>
-              <td>${escapeHtml(r.ts ? r.ts.slice(0, 16).replace("T", " ") : "")}</td>
-              <td><strong>${escapeHtml(r.ticker)}</strong></td>
-              <td>${escapeHtml((r.direction || "long").toUpperCase())}</td>
-              <td class="num">${typeof r.bull_prob === "number" ? (r.bull_prob * 100).toFixed(0) + "%" : "—"}</td>
-              <td class="num">${typeof r.classic_p_up === "number" ? (r.classic_p_up * 100).toFixed(0) + "%" : "—"}</td>
-              <td class="num">${fmtMoney(r.entry)}</td>
-              <td class="num">${fmtMoney(r.take_profit)}</td>
-              <td class="num">${fmtMoney(r.stop_loss)}</td>
-              <td><span class="status-pill status-open">Open</span></td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
+  }[char]));
 }
 
 function outcomeLabel(outcome) {
@@ -734,194 +460,444 @@ function outcomeLabel(outcome) {
   }[outcome] || "Open";
 }
 
-function renderStrategies(strategies, agents) {
-  const counts = {};
-  for (const a of agents) counts[a.type] = (counts[a.type] || 0) + 1;
-  const html = Object.entries(strategies).map(([key, info]) => `
-    <div class="strategy-card">
-      <div class="label">${info.label}</div>
-      <div class="desc">${info.desc}</div>
-      <div class="count">${counts[key] || 0} agent(s)</div>
+function outcomePill(outcome) {
+  if (outcome === "tp_hit") return `<span class="pill good">TP hit</span>`;
+  if (outcome === "sl_hit") return `<span class="pill bad">SL hit</span>`;
+  if (outcome === "expired") return `<span class="pill muted">Expired</span>`;
+  return `<span class="pill pending">Open</span>`;
+}
+
+function tradeReturnPct(record) {
+  if (!isResolved(record)) return null;
+  if (typeof record.return_pct === "number") return record.return_pct;
+  if (!record.entry || !record.take_profit || !record.stop_loss) return null;
+  const direction = record.direction || "long";
+  if (record.outcome === "tp_hit") {
+    return direction === "short"
+      ? ((record.entry - record.take_profit) / record.entry) * 100
+      : ((record.take_profit - record.entry) / record.entry) * 100;
+  }
+  if (record.outcome === "sl_hit") {
+    return direction === "short"
+      ? ((record.entry - record.stop_loss) / record.entry) * 100
+      : ((record.stop_loss - record.entry) / record.entry) * 100;
+  }
+  return 0;
+}
+
+function tradeR(record) {
+  if (!isResolved(record)) return null;
+  if (record.outcome === "tp_hit") return typeof record.rr_ratio === "number" ? record.rr_ratio : 1;
+  if (record.outcome === "sl_hit") return -1;
+  return 0;
+}
+
+function directionScore(record) {
+  if (typeof record.bull_prob !== "number") return null;
+  return (record.direction || "long") === "short" ? 1 - record.bull_prob : record.bull_prob;
+}
+
+function classicDirectionScore(record) {
+  if (typeof record.classic_p_up !== "number") return null;
+  return (record.direction || "long") === "short" ? 1 - record.classic_p_up : record.classic_p_up;
+}
+
+function computeStats(records) {
+  const entryRows = entries(records);
+  const closed = closedEntries(records);
+  const open = openEntries(records);
+  const wins = closed.filter(record => record.outcome === "tp_hit");
+  const totalR = closed.reduce((sum, record) => sum + (tradeR(record) ?? 0), 0);
+  return {
+    total: records.length,
+    entryCount: entryRows.length,
+    closedCount: closed.length,
+    openCount: open.length,
+    winCount: wins.length,
+    winRate: closed.length ? wins.length / closed.length : null,
+    totalR,
+    avgR: closed.length ? totalR / closed.length : null,
+    blocked: records.filter(record => (record.entry_block_reasons || []).length).length,
+    resolved: records.filter(isResolved).length,
+    latest: records.reduce((latest, record) => !latest || record.ts > latest ? record.ts : latest, ""),
+  };
+}
+
+function chartOptions(extra = {}) {
+  return {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: "#d6dde6" } },
+      tooltip: extra.tooltip || {},
+    },
+    scales: {
+      x: { ticks: { color: "#d6dde6" }, grid: { color: "#222a34" } },
+      y: { ticks: { color: "#d6dde6" }, grid: { color: "#222a34" } },
+    },
+    ...extra,
+  };
+}
+
+function resetCanvas(id) {
+  Chart.getChart(id)?.destroy();
+  const canvas = document.getElementById(id);
+  canvas.style.display = "";
+  const empty = canvas.parentElement.querySelector(".empty");
+  if (empty) empty.remove();
+  return canvas.getContext("2d");
+}
+
+function showEmpty(canvasId, message) {
+  Chart.getChart(canvasId)?.destroy();
+  const canvas = document.getElementById(canvasId);
+  canvas.style.display = "none";
+  if (!canvas.parentElement.querySelector(".empty")) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    canvas.parentElement.appendChild(empty);
+  }
+  canvas.parentElement.querySelector(".empty").textContent = message;
+}
+
+function renderStatus(records, stats) {
+  const latestAll = allRecords.reduce((latest, record) => !latest || record.ts > latest ? record.ts : latest, "");
+  const resolvedAll = allRecords.filter(isResolved).length;
+  const cards = [
+    { label: "Selected View", value: activeMode.toUpperCase() },
+    { label: "Latest Analysis", value: formatDate(stats.latest || latestAll) },
+    { label: "Data Loaded", value: `${records.length} rows in view` },
+    { label: "Outcome Data", value: `${resolvedAll} resolved rows` },
+  ];
+  document.getElementById("statusStrip").innerHTML = cards.map(card => `
+    <div class="status">
+      <div class="label">${card.label}</div>
+      <div class="value">${card.value}</div>
     </div>
   `).join("");
-  document.getElementById("strategies").innerHTML = html;
 }
 
-function renderAgentRoster(agents, perAgentStats) {
-  const html = agents.map(a => {
-    const stats = perAgentStats[a.name] || {};
-    const stance = a.stance;
-    const cat = a.category && a.category.label || a.type;
-    const statLine = stats.n
-      ? `<div class="agent-stat">📈 ${stats.n} call(s) — avg p_up ${(stats.avgScore * 100).toFixed(0)}%, avg conf ${(stats.avgConf * 100).toFixed(0)}%</div>`
-      : `<div class="agent-stat">No calls yet</div>`;
-    return `
-      <div class="agent-card ${stance}">
-        <div class="agent-name">${a.name}</div>
-        <div class="agent-meta">
-          <span class="badge ${stance}">${stance.toUpperCase()}</span>
-          <span class="badge">${cat}</span>
-        </div>
-        <details>
-          <summary>Show prompt</summary>
-          <div class="agent-prompt" style="margin-top:8px">${a.prompt}</div>
-        </details>
-        ${statLine}
-      </div>
-    `;
-  }).join("");
-  document.getElementById("agentRoster").innerHTML = html;
+function renderModeNote(stats) {
+  const notes = {
+    signal: `<strong>SIGNAL</strong> is the main performance view. It contains real trade alerts. In this view there are <strong>${stats.entryCount}</strong> ENTRY recommendations, <strong>${stats.closedCount}</strong> closed and <strong>${stats.openCount}</strong> still open.`,
+    scan: `<strong>SCAN</strong> is a watchlist/research view. It is useful for market reads, but it intentionally does not create ENTRY recommendations, so performance charts can be empty here.`,
+    all: `<strong>ALL</strong> mixes trade alerts and watchlist scans. Use it for inspection. Use SIGNAL when you want clean trading performance.`,
+  };
+  document.getElementById("modeNote").innerHTML = notes[activeMode];
 }
 
-function perAgentStats(records) {
-  const out = {};
-  for (const r of records) {
-    for (const a of (r.agents || [])) {
-      if (!out[a.name]) out[a.name] = { n: 0, sumScore: 0, sumConf: 0 };
-      out[a.name].n++;
-      out[a.name].sumScore += a.score;
-      out[a.name].sumConf += a.confidence;
-    }
-  }
-  for (const k in out) {
-    out[k].avgScore = out[k].sumScore / out[k].n;
-    out[k].avgConf = out[k].sumConf / out[k].n;
-  }
-  return out;
+function renderKpis(stats) {
+  const winRate = stats.winRate === null ? "-" : `${(stats.winRate * 100).toFixed(1)}%`;
+  const avgR = stats.avgR === null ? "-" : `${stats.avgR >= 0 ? "+" : ""}${stats.avgR.toFixed(2)}R`;
+  const totalR = `${stats.totalR >= 0 ? "+" : ""}${stats.totalR.toFixed(2)}R`;
+  const cards = [
+    { label: "Closed Trades", value: stats.closedCount, detail: "Only measured ENTRY results", tone: "neutral" },
+    { label: "Win Rate", value: winRate, detail: `${stats.winCount}/${stats.closedCount}`, tone: stats.winRate >= .5 ? "good" : "bad" },
+    { label: "Total R", value: totalR, detail: "Risk-normalized result", tone: stats.totalR >= 0 ? "good" : "bad" },
+    { label: "Avg R", value: avgR, detail: "Average closed trade", tone: stats.avgR >= 0 ? "good" : "bad" },
+    { label: "Open ENTRY", value: stats.openCount, detail: "Waiting for outcome", tone: "pending" },
+    { label: "Blocked", value: stats.blocked, detail: "Stopped by safety rules", tone: "bad" },
+  ];
+  document.getElementById("kpis").innerHTML = cards.map(card => `
+    <div class="kpi">
+      <div class="label">${card.label}</div>
+      <div class="value ${card.tone}">${card.value}</div>
+      <div class="detail">${card.detail}</div>
+    </div>
+  `).join("");
 }
 
-function renderAgentScoresChart(perAgent) {
-  const wrap = document.getElementById("agentScoresWrap");
-  const names = Object.keys(perAgent);
-  if (!names.length) {
-    wrap.innerHTML = `<div class="empty">No agent data for this view.</div>`;
+function renderCumulativeChart(records) {
+  const closed = closedEntries(records).slice(-40);
+  document.getElementById("closedCountPill").textContent = `${closed.length} closed`;
+  if (!closed.length) {
+    showEmpty("cumulativeChart", "No closed ENTRY trades yet in this view.");
     return;
   }
-  wrap.innerHTML = `<canvas id="agentScoresChart"></canvas>`;
-  const ctx = document.getElementById("agentScoresChart").getContext("2d");
-  Chart.getChart("agentScoresChart")?.destroy();
-  new Chart(ctx, {
-    type: "bar",
+  let cumulative = 0;
+  const points = closed.map(record => {
+    cumulative += tradeR(record) ?? 0;
+    return +cumulative.toFixed(2);
+  });
+  new Chart(resetCanvas("cumulativeChart"), {
+    type: "line",
     data: {
-      labels: names,
-      datasets: [
-        { label: "Avg p_up", data: names.map(n => +(perAgent[n].avgScore * 100).toFixed(1)), backgroundColor: "#58a6ff" },
-        { label: "Avg confidence", data: names.map(n => +(perAgent[n].avgConf * 100).toFixed(1)), backgroundColor: "#d29922" },
-      ],
+      labels: closed.map(record => `${record.ticker} ${record.ts ? record.ts.slice(5, 10) : ""}`),
+      datasets: [{
+        label: "Cumulative R",
+        data: points,
+        borderColor: "#58a6ff",
+        backgroundColor: "rgba(88,166,255,.14)",
+        pointBackgroundColor: closed.map(record => record.outcome === "tp_hit" ? "#3fb950" : record.outcome === "sl_hit" ? "#f85149" : "#8f9aa8"),
+        pointRadius: 5,
+        tension: .25,
+      }],
     },
-    options: {
-      indexAxis: "y",
-      maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: "#c9d1d9" } } },
+    options: chartOptions({
       scales: {
-        x: { ticks: { color: "#c9d1d9", callback: v => v + "%" }, grid: { color: "#21262d" }, max: 100 },
-        y: { ticks: { color: "#c9d1d9" }, grid: { display: false } },
+        x: { ticks: { color: "#d6dde6", maxRotation: 35 }, grid: { display: false } },
+        y: { ticks: { color: "#d6dde6", callback: value => `${value}R` }, grid: { color: "#222a34" } },
       },
-    },
+    }),
   });
 }
 
-function renderAgreementCharts(records) {
-  const scored = records
-    .filter(r => typeof r.classic_p_up === "number" && typeof r.bull_prob === "number")
-    .slice(-40);
-  if (!scored.length) {
-    setEmpty("agreementScatterWrap", "Need records with both Final and Classic scores.");
-    setEmpty("consensusWinRateWrap", "Consensus win-rate appears after scored records resolve to TP/SL.");
-    return;
-  }
+function decisionBuckets(records) {
+  const buckets = [
+    { key: "All rows", value: records.length, color: "#58a6ff" },
+    { key: "ENTRY", value: entries(records).length, color: "#a371f7" },
+    { key: "Passed risk", value: entries(records).length, color: "#3fb950" },
+    { key: "Open", value: openEntries(records).length, color: "#d29922" },
+    { key: "Closed", value: closedEntries(records).length, color: "#3fb950" },
+    { key: "Blocked", value: records.filter(record => (record.entry_block_reasons || []).length).length, color: "#f85149" },
+  ];
+  return buckets;
+}
 
-  const scatterCtx = canvasIn("agreementScatterWrap", "agreementScatterChart");
-  new Chart(scatterCtx, {
-    type: "scatter",
+function renderFunnel(records) {
+  const buckets = decisionBuckets(records);
+  new Chart(resetCanvas("funnelChart"), {
+    type: "bar",
     data: {
+      labels: buckets.map(bucket => bucket.key),
       datasets: [{
-        label: "Final vs Classic",
-        data: scored.map(r => ({
-          x: +(classicDirectionScore(r) * 100).toFixed(1),
-          y: +(finalDirectionScore(r) * 100).toFixed(1),
-          ticker: r.ticker,
-          verdict: r.verdict,
-        })),
-        backgroundColor: scored.map(r => r.verdict === "ENTRY" ? "#3fb950" : "#d29922"),
-        pointRadius: 5,
+        label: "Count",
+        data: buckets.map(bucket => bucket.value),
+        backgroundColor: buckets.map(bucket => bucket.color),
       }],
     },
-    options: {
-      maintainAspectRatio: false,
+    options: chartOptions({
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#d6dde6", precision: 0 }, grid: { color: "#222a34" } },
+        y: { ticks: { color: "#d6dde6" }, grid: { display: false } },
+      },
+    }),
+  });
+}
+
+function renderClosedReturnChart(records) {
+  const closed = closedEntries(records).slice(-20);
+  if (!closed.length) {
+    showEmpty("closedReturnChart", "No closed ENTRY trades to plot.");
+    return;
+  }
+  const returns = closed.map(tradeReturnPct);
+  new Chart(resetCanvas("closedReturnChart"), {
+    type: "bar",
+    data: {
+      labels: closed.map(record => `${record.ticker} ${record.ts ? record.ts.slice(5, 10) : ""}`),
+      datasets: [{
+        label: "Return %",
+        data: returns,
+        backgroundColor: returns.map(value => value >= 0 ? "#3fb950" : "#f85149"),
+      }],
+    },
+    options: chartOptions({
       plugins: {
-        legend: { labels: { color: chartTextColor() } },
+        legend: { labels: { color: "#d6dde6" } },
         tooltip: {
           callbacks: {
-            label: ctx => {
-              const p = ctx.raw;
-              return `${p.ticker}: Classic ${p.x}% / Final ${p.y}% / ${p.verdict}`;
+            label: context => {
+              const record = closed[context.dataIndex];
+              return `${formatPct(tradeReturnPct(record))} | ${outcomeLabel(record.outcome)} | R ${tradeR(record)?.toFixed(2)}`;
             },
           },
         },
       },
       scales: {
-        x: { title: { display: true, text: "Classic direction score", color: chartTextColor() }, min: 0, max: 100, ticks: { color: chartTextColor(), callback: v => v + "%" }, grid: { color: chartGridColor() } },
-        y: { title: { display: true, text: "Final direction score", color: chartTextColor() }, min: 0, max: 100, ticks: { color: chartTextColor(), callback: v => v + "%" }, grid: { color: chartGridColor() } },
+        x: { ticks: { color: "#d6dde6", maxRotation: 35 }, grid: { display: false } },
+        y: { ticks: { color: "#d6dde6", callback: value => `${value}%` }, grid: { color: "#222a34" } },
       },
-    },
-  });
-
-  const groups = {
-    consensus: { label: "Final + Classic agree", wins: 0, total: 0 },
-    noConsensus: { label: "No strong agreement", wins: 0, total: 0 },
-  };
-  for (const r of scored.filter(isResolved)) {
-    const consensus = hasModelConsensus(r);
-    const bucket = consensus ? groups.consensus : groups.noConsensus;
-    bucket.total++;
-    if (r.outcome === "tp_hit") bucket.wins++;
-  }
-  const rows = Object.values(groups).filter(g => g.total);
-  if (!rows.length) {
-    setEmpty("consensusWinRateWrap", "No resolved Final/Classic records yet. This will show whether agreement actually improves hit rate.");
-    return;
-  }
-  const consensusCtx = canvasIn("consensusWinRateWrap", "consensusWinRateChart");
-  new Chart(consensusCtx, {
-    type: "bar",
-    data: {
-      labels: rows.map(r => `${r.label} (n=${r.total})`),
-      datasets: [{
-        label: "TP hit rate",
-        data: rows.map(r => +(r.wins / r.total * 100).toFixed(1)),
-        backgroundColor: rows.map(r => r.wins / r.total >= 0.6 ? "#3fb950" : r.wins / r.total >= 0.5 ? "#d29922" : "#f85149"),
-      }],
-    },
-    options: {
-      indexAxis: "y",
-      maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: chartTextColor() } } },
-      scales: {
-        x: { min: 0, max: 100, ticks: { color: chartTextColor(), callback: v => v + "%" }, grid: { color: chartGridColor() } },
-        y: { ticks: { color: chartTextColor() }, grid: { display: false } },
-      },
-    },
+    }),
   });
 }
 
-function aggregateAccuracyBy(records, keyFn) {
-  const buckets = {};
-  for (const r of records.filter(isResolved)) {
-    const bullish = actualUpOutcome(r);
-    for (const a of r.agents || []) {
-      const prediction = agentPrediction(r, a);
-      if (prediction === null) continue;
-      const k = keyFn(a);
-      if (!buckets[k]) buckets[k] = { correct: 0, total: 0 };
-      const correct = prediction === bullish;
-      if (correct) buckets[k].correct++;
-      buckets[k].total++;
+function tableOrEmpty(containerId, rows, headers, rowFn, emptyText) {
+  const container = document.getElementById(containerId);
+  if (!rows.length) {
+    container.innerHTML = `<div class="empty">${emptyText}</div>`;
+    return;
+  }
+  container.innerHTML = `
+    <div class="scroll">
+      <table>
+        <thead><tr>${headers.map(header => `<th class="${header.num ? "num" : ""}">${header.label}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map(rowFn).join("")}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderClosedTable(records) {
+  const rows = closedEntries(records).slice(-30).reverse();
+  tableOrEmpty(
+    "closedTable",
+    rows,
+    [
+      { label: "Date" }, { label: "Ticker" }, { label: "Result" },
+      { label: "Return", num: true }, { label: "R", num: true },
+      { label: "Entry", num: true }, { label: "TP", num: true }, { label: "SL", num: true },
+    ],
+    record => `
+      <tr>
+        <td>${formatDate(record.ts)}</td>
+        <td><strong>${escapeHtml(record.ticker)}</strong></td>
+        <td>${outcomePill(record.outcome)}</td>
+        <td class="num">${formatPct(tradeReturnPct(record))}</td>
+        <td class="num">${(tradeR(record) ?? 0).toFixed(2)}R</td>
+        <td class="num">${formatMoney(record.entry)}</td>
+        <td class="num">${formatMoney(record.take_profit)}</td>
+        <td class="num">${formatMoney(record.stop_loss)}</td>
+      </tr>
+    `,
+    "No closed ENTRY trades in this view."
+  );
+}
+
+function renderOpenTable(records) {
+  const rows = openEntries(records).slice(-40).reverse();
+  document.getElementById("openCountPill").textContent = `${rows.length} open`;
+  tableOrEmpty(
+    "openTable",
+    rows,
+    [
+      { label: "Date" }, { label: "Ticker" }, { label: "Dir" },
+      { label: "Final", num: true }, { label: "Classic", num: true },
+      { label: "Entry", num: true }, { label: "TP", num: true }, { label: "SL", num: true }, { label: "Status" },
+    ],
+    record => `
+      <tr>
+        <td>${formatDate(record.ts)}</td>
+        <td><strong>${escapeHtml(record.ticker)}</strong></td>
+        <td>${escapeHtml((record.direction || "long").toUpperCase())}</td>
+        <td class="num">${typeof record.bull_prob === "number" ? `${(record.bull_prob * 100).toFixed(0)}%` : "-"}</td>
+        <td class="num">${typeof record.classic_p_up === "number" ? `${(record.classic_p_up * 100).toFixed(0)}%` : "-"}</td>
+        <td class="num">${formatMoney(record.entry)}</td>
+        <td class="num">${formatMoney(record.take_profit)}</td>
+        <td class="num">${formatMoney(record.stop_loss)}</td>
+        <td><span class="pill pending">Waiting</span></td>
+      </tr>
+    `,
+    "No open ENTRY recommendations in this view."
+  );
+}
+
+function summarizeReason(reason) {
+  if (reason.includes("watchlist scan")) return "Scan only";
+  if (reason.includes("R:R")) return "Risk/reward too low";
+  if (reason.includes("above entry")) return "Late long entry";
+  if (reason.includes("below short entry")) return "Late short entry";
+  return reason || "Other";
+}
+
+function explainReason(rule) {
+  if (rule === "Risk/reward too low") return "The potential reward to TP is too small compared with the stop-loss risk.";
+  if (rule === "Scan only") return "This was research/watchlist mode, not a real trade alert.";
+  if (rule === "Late long entry") return "Price moved too far above the suggested entry before analysis.";
+  if (rule === "Late short entry") return "Price moved too far below the suggested short entry before analysis.";
+  return "A safety rule blocked the setup before ENTRY.";
+}
+
+function renderBlockedReasons(records) {
+  const groups = {};
+  for (const record of records) {
+    for (const reason of record.entry_block_reasons || []) {
+      const key = summarizeReason(reason);
+      if (!groups[key]) groups[key] = { key, count: 0, examples: [] };
+      groups[key].count++;
+      if (groups[key].examples.length < 3) groups[key].examples.push(`${record.ticker}: ${reason}`);
     }
   }
-  return Object.entries(buckets)
-    .map(([k, v]) => ({ key: k, accuracy: v.correct / v.total, total: v.total }))
-    .sort((a, b) => b.accuracy - a.accuracy);
+  const rows = Object.values(groups).sort((a, b) => b.count - a.count);
+  const container = document.getElementById("blockedReasons");
+  if (!rows.length) {
+    container.innerHTML = `<div class="empty">No blocked setups in this view.</div>`;
+    return;
+  }
+  container.innerHTML = `<div class="reason-list">${rows.map(row => `
+    <div class="reason-row">
+      <div>
+        <div class="reason-name">${escapeHtml(row.key)}</div>
+        <div class="reason-help">${escapeHtml(explainReason(row.key))}</div>
+      </div>
+      <div class="reason-help">${escapeHtml(row.examples.join(" | "))}</div>
+      <span class="pill bad">${row.count}</span>
+    </div>
+  `).join("")}</div>`;
+}
+
+function decisionReason(record) {
+  if (record.verdict === "ENTRY") {
+    if (isResolved(record)) return `ENTRY closed: ${outcomeLabel(record.outcome)} (${formatPct(tradeReturnPct(record))}, ${(tradeR(record) ?? 0).toFixed(2)}R)`;
+    return "ENTRY is open and waiting for outcome tracking.";
+  }
+  if ((record.entry_block_reasons || []).length) return record.entry_block_reasons.join(" | ");
+  if (recordMode(record) === "scan") return "Watchlist scan, not an entry recommendation.";
+  const score = directionScore(record);
+  if (typeof score === "number") return `Direction score ${(score * 100).toFixed(0)}% did not become ENTRY.`;
+  return "Skipped by model or missing trade setup.";
+}
+
+function decisionPill(record) {
+  if (record.verdict === "ENTRY" && !isResolved(record)) return `<span class="pill pending">Open ENTRY</span>`;
+  if (record.verdict === "ENTRY" && record.outcome === "tp_hit") return `<span class="pill good">Win</span>`;
+  if (record.verdict === "ENTRY" && record.outcome === "sl_hit") return `<span class="pill bad">Loss</span>`;
+  if ((record.entry_block_reasons || []).length) return `<span class="pill bad">Blocked</span>`;
+  if (recordMode(record) === "scan") return `<span class="pill info">Scan</span>`;
+  return `<span class="pill muted">Skip</span>`;
+}
+
+function renderRecentDecisions(records) {
+  const rows = records.slice(-40).reverse();
+  tableOrEmpty(
+    "recentDecisions",
+    rows,
+    [
+      { label: "Ticker" }, { label: "Mode" }, { label: "Decision" }, { label: "Reason" },
+    ],
+    record => `
+      <tr>
+        <td><strong>${escapeHtml(record.ticker)}</strong></td>
+        <td>${recordMode(record).toUpperCase()}</td>
+        <td>${decisionPill(record)}</td>
+        <td>${escapeHtml(decisionReason(record))}</td>
+      </tr>
+    `,
+    "No recent decisions in this view."
+  );
+}
+
+function renderAgreement(records) {
+  const rows = records
+    .filter(record => typeof record.bull_prob === "number" && typeof record.classic_p_up === "number")
+    .slice(-50);
+  if (!rows.length) {
+    showEmpty("agreementChart", "No records with both Final and Classic scores.");
+    return;
+  }
+  new Chart(resetCanvas("agreementChart"), {
+    type: "scatter",
+    data: {
+      datasets: [{
+        label: "Final vs Classic",
+        data: rows.map(record => ({
+          x: +(classicDirectionScore(record) * 100).toFixed(1),
+          y: +(directionScore(record) * 100).toFixed(1),
+          ticker: record.ticker,
+          verdict: record.verdict,
+        })),
+        backgroundColor: rows.map(record => record.verdict === "ENTRY" ? "#3fb950" : "#d29922"),
+        pointRadius: 5,
+      }],
+    },
+    options: chartOptions({
+      scales: {
+        x: { min: 0, max: 100, title: { display: true, text: "Classic direction score", color: "#d6dde6" }, ticks: { color: "#d6dde6", callback: value => `${value}%` }, grid: { color: "#222a34" } },
+        y: { min: 0, max: 100, title: { display: true, text: "Final direction score", color: "#d6dde6" }, ticks: { color: "#d6dde6", callback: value => `${value}%` }, grid: { color: "#222a34" } },
+      },
+    }),
+  });
 }
 
 function actualUpOutcome(record) {
@@ -932,20 +908,16 @@ function actualUpOutcome(record) {
 function usesDirectionalScore(record) {
   if (record.score_contract === "directional_p_up") return true;
   const currentNames = new Set([
-    "Momentum & Trend",
-    "Structure & Levels",
-    "Volume & Flow",
-    "Reversal & Overbought",
-    "Macro & Sector",
-    "Risk & Stop Distance",
+    "Momentum & Trend", "Structure & Levels", "Volume & Flow",
+    "Reversal & Overbought", "Macro & Sector", "Risk & Stop Distance",
     "Classic Technical",
   ]);
   const agents = record.agents || [];
-  return agents.length === 6 || agents.length === 7 || agents.some(a => currentNames.has(a.name));
+  return agents.length === 6 || agents.length === 7 || agents.some(agent => currentNames.has(agent.name));
 }
 
 function agentPrediction(record, agent) {
-  const score = agent.score;
+  const score = typeof agent.p_up === "number" ? agent.p_up : agent.score;
   if (typeof score !== "number") return null;
   if (usesDirectionalScore(record)) {
     if (score >= HIGH_SCORE) return true;
@@ -956,250 +928,85 @@ function agentPrediction(record, agent) {
   return agent.stance === "bull";
 }
 
-function renderAccuracyChart(containerId, rows, emptyText) {
-  const c = document.getElementById(containerId);
+function renderAgentAccuracy(records) {
+  const buckets = {};
+  for (const record of records.filter(isResolved)) {
+    const actual = actualUpOutcome(record);
+    for (const agent of record.agents || []) {
+      const prediction = agentPrediction(record, agent);
+      if (prediction === null) continue;
+      if (!buckets[agent.name]) buckets[agent.name] = { correct: 0, total: 0 };
+      buckets[agent.name].total++;
+      if (prediction === actual) buckets[agent.name].correct++;
+    }
+  }
+  const rows = Object.entries(buckets)
+    .map(([name, value]) => ({ name, total: value.total, accuracy: value.correct / value.total }))
+    .filter(row => row.total > 0)
+    .sort((a, b) => b.accuracy - a.accuracy)
+    .slice(0, 10);
   if (!rows.length) {
-    c.innerHTML = `<div class="empty">${emptyText}</div>`;
+    showEmpty("agentAccuracyChart", "No resolved agent predictions yet.");
     return;
   }
-  c.innerHTML = `<div class="chart-wrap"><canvas id="${containerId}_canvas"></canvas></div>`;
-  const ctx = document.getElementById(containerId + "_canvas").getContext("2d");
-  new Chart(ctx, {
+  new Chart(resetCanvas("agentAccuracyChart"), {
     type: "bar",
     data: {
-      labels: rows.map(r => `${r.key} (n=${r.total})`),
+      labels: rows.map(row => `${row.name} (n=${row.total})`),
       datasets: [{
-        label: "Accuracy %",
-        data: rows.map(r => +(r.accuracy * 100).toFixed(1)),
-        backgroundColor: rows.map(r => r.accuracy >= 0.6 ? "#3fb950" : r.accuracy >= 0.5 ? "#d29922" : "#f85149"),
+        label: "Accuracy",
+        data: rows.map(row => +(row.accuracy * 100).toFixed(1)),
+        backgroundColor: rows.map(row => row.accuracy >= .6 ? "#3fb950" : row.accuracy >= .5 ? "#d29922" : "#f85149"),
       }],
     },
-    options: {
+    options: chartOptions({
       indexAxis: "y",
-      maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: "#c9d1d9", callback: v => v + "%" }, grid: { color: "#21262d" }, max: 100 },
-        y: { ticks: { color: "#c9d1d9" }, grid: { display: false } },
+        x: { min: 0, max: 100, ticks: { color: "#d6dde6", callback: value => `${value}%` }, grid: { color: "#222a34" } },
+        y: { ticks: { color: "#d6dde6" }, grid: { display: false } },
       },
-    },
+    }),
   });
 }
 
-function blockedRows(records) {
-  const groups = {};
-  for (const r of records) {
-    for (const reason of r.entry_block_reasons || []) {
-      const key = summarizeReason(reason);
-      if (!groups[key]) groups[key] = { rule: key, count: 0, reasons: new Set(), examples: [] };
-      groups[key].count++;
-      groups[key].reasons.add(reason);
-      if (groups[key].examples.length < 5) {
-        groups[key].examples.push({
-          ticker: r.ticker,
-          date: r.ts ? r.ts.slice(0, 10) : "",
-          mode: recordMode(r).toUpperCase(),
-          reason,
-        });
-      }
-    }
-  }
-  return Object.values(groups)
-    .sort((a, b) => b.count - a.count);
-}
-
-function summarizeReason(reason) {
-  if (reason.includes("watchlist scan")) return "Watchlist scan only";
-  if (reason.includes("above entry")) return "Current price above entry";
-  if (reason.includes("below short entry")) return "Current price below short entry";
-  if (reason.includes("R:R")) return "Risk/reward too low";
-  return reason;
-}
-
-function explainReason(rule) {
-  if (rule === "Risk/reward too low") {
-    return "The potential reward to TP is too small compared with the risk to SL. The bot requires at least 1.5R, so a setup like R:R 1.23 is blocked even if the chart looks interesting.";
-  }
-  if (rule === "Current price above entry") {
-    return "For a long signal, price already ran too far above the suggested entry. Chasing late entries usually worsens risk/reward.";
-  }
-  if (rule === "Current price below short entry") {
-    return "For a short signal, price already moved too far below the suggested entry. The trade may be stale.";
-  }
-  if (rule === "Watchlist scan only") {
-    return "This came from a watchlist scan, not a Discord trade signal. It can flag interest, but it should not become an ENTRY by itself.";
-  }
-  return "Safety rule blocked this setup before it could become an ENTRY.";
-}
-
-function renderBlockedReasons(records) {
-  const rows = blockedRows(records);
-  const c = document.getElementById("blockedContainer");
-  if (!rows.length) {
-    c.innerHTML = `<div class="empty">No blocked setups in this view.</div>`;
-    return;
-  }
-  c.innerHTML = `
-    <table>
-      <thead><tr><th>Rule</th><th>What it means</th><th>Examples</th><th class="num">Count</th></tr></thead>
-      <tbody>
-        ${rows.map(r => `
-          <tr>
-            <td><strong>${r.rule}</strong><div class="state-muted">${Array.from(r.reasons).join(" · ")}</div></td>
-            <td>${explainReason(r.rule)}</td>
-            <td>${r.examples.map(e => `<div><strong>${e.ticker}</strong> ${e.mode} ${e.date}<br><span class="state-muted">${e.reason}</span></div>`).join("")}</td>
-            <td class="num">${r.count}</td>
-          </tr>
-        `).join("")}
-      </tbody>
-    </table>
-  `;
-}
-
-function renderClassicComparison(records) {
-  const c = document.getElementById("classicContainer");
-  const rows = records
-    .filter(r => typeof r.classic_p_up === "number")
-    .slice(-20)
-    .reverse();
-  if (!rows.length) {
-    c.innerHTML = `<div class="empty">Classic scores will appear after the next analyzed setup.</div>`;
-    return;
-  }
-  c.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th><th>Ticker</th><th>Mode</th><th>Verdict</th>
-          <th class="num">Final</th><th class="num">Classic</th><th class="num">Delta</th><th>Read</th><th>Outcome</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows.map(r => {
-          const final = r.bull_prob;
-          const classic = r.classic_p_up;
-          const delta = final - classic;
-          const read = Math.abs(delta) >= 0.15 ? "Review" : "Aligned";
-          return `
-            <tr>
-              <td>${r.ts.slice(0, 16).replace("T", " ")}</td>
-              <td><strong>${r.ticker}</strong></td>
-              <td class="mode-${recordMode(r)}">${recordMode(r).toUpperCase()}</td>
-              <td class="verdict-${r.verdict.toLowerCase()}">${r.verdict}</td>
-              <td class="num">${(final * 100).toFixed(0)}%</td>
-              <td class="num">${(classic * 100).toFixed(0)}%</td>
-              <td class="num">${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(0)}%</td>
-              <td class="${read === "Aligned" ? "state-good" : "state-bad"}">${read}</td>
-              <td>${outcomeBadge(r.outcome)}</td>
-            </tr>
-          `;
-        }).join("")}
-      </tbody>
-    </table>
-  `;
-}
-
-function outcomeBadge(o) {
-  return {
-    tp_hit: '<span class="outcome-tp">🟢 TP hit</span>',
-    sl_hit: '<span class="outcome-sl">🔴 SL hit</span>',
-    expired: '<span class="outcome-expired">⚪ expired</span>',
-    still_open: '<span class="outcome-open">⏳ open</span>',
-  }[o] || '<span class="outcome-open">⏳ open</span>';
-}
-
-function renderRecent(records) {
-  const c = document.getElementById("recentContainer");
-  if (!records.length) {
-    c.innerHTML = `<div class="empty">No analyses logged yet. The next broadcast (every 15 min) will populate this.</div>`;
-    return;
-  }
-  const rows = records.slice(-30).reverse();
-  c.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th><th>Ticker</th><th>Mode</th><th>Dir</th><th>Verdict</th>
-          <th class="num">Bull%</th><th class="num">Bear%</th><th class="num">Classic</th>
-          <th class="num">Entry</th><th class="num">TP</th><th class="num">SL</th>
-          <th>Outcome</th><th>Source</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows.map(r => `
-          <tr>
-            <td>${r.ts.slice(0, 16).replace("T", " ")}</td>
-            <td><strong>${r.ticker}</strong></td>
-            <td class="mode-${recordMode(r)}">${recordMode(r).toUpperCase()}</td>
-            <td>${(r.direction || "long").toUpperCase()}</td>
-            <td class="verdict-${r.verdict.toLowerCase()}">${r.verdict}</td>
-            <td class="num">${(r.bull_prob * 100).toFixed(0)}%</td>
-            <td class="num">${(r.bear_prob * 100).toFixed(0)}%</td>
-            <td class="num">${typeof r.classic_p_up === "number" ? (r.classic_p_up * 100).toFixed(0) + "%" : "—"}</td>
-            <td class="num">${r.entry ? "$" + r.entry.toFixed(2) : "—"}</td>
-            <td class="num">${r.take_profit ? "$" + r.take_profit.toFixed(2) : "—"}</td>
-            <td class="num">${r.stop_loss ? "$" + r.stop_loss.toFixed(2) : "—"}</td>
-            <td>${outcomeBadge(r.outcome)}</td>
-            <td>${r.source}</td>
-          </tr>
-        `).join("")}
-      </tbody>
-    </table>
-  `;
+function updateTabs() {
+  const labels = { signal: "SIGNAL", scan: "SCAN", all: "ALL" };
+  document.querySelectorAll("#modeTabs button").forEach(button => {
+    const mode = button.dataset.mode;
+    const count = mode === "all" ? allRecords.length : allRecords.filter(record => recordMode(record) === mode).length;
+    button.textContent = `${labels[mode]} (${count})`;
+    button.classList.toggle("active", mode === activeMode);
+  });
 }
 
 function renderDashboard() {
   const records = visibleRecords();
-  renderModeExplanation(records);
-  renderKpis(computeKpis(records));
-  renderDecisionFlow(records);
-  renderStockFlow(records);
-  renderRecommendationPerformance(records);
-  renderAgreementCharts(records);
+  const stats = computeStats(records);
+  updateTabs();
+  renderStatus(records, stats);
+  renderModeNote(stats);
+  renderKpis(stats);
+  renderCumulativeChart(records);
+  renderFunnel(records);
+  renderClosedReturnChart(records);
+  renderClosedTable(records);
+  renderOpenTable(records);
   renderBlockedReasons(records);
-  renderClassicComparison(records);
-  renderStrategies(allAgentsData.strategies || {}, allAgentsData.agents || []);
-  const perAgent = perAgentStats(records);
-  renderAgentRoster(allAgentsData.agents || [], perAgent);
-  renderAgentScoresChart(perAgent);
-  renderAccuracyChart(
-    "strategyChartContainer",
-    aggregateAccuracyBy(records, a => a.type || "unknown"),
-    "Need resolved outcomes to compute strategy accuracy. Comes online after the daily outcome tracker runs (and after at least one TP/SL is hit)."
-  );
-  renderAccuracyChart(
-    "agentChartContainer",
-    aggregateAccuracyBy(records, a => a.name),
-    "Need resolved outcomes to compute per-agent accuracy."
-  );
-  renderRecent(records);
+  renderRecentDecisions(records);
+  renderAgreement(records);
+  renderAgentAccuracy(records);
 }
 
-function setupModeTabs() {
-  document.querySelectorAll("#modeTabs button").forEach(button => {
-    button.addEventListener("click", () => {
-      activeMode = button.dataset.mode;
-      document.querySelectorAll("#modeTabs button").forEach(b => b.classList.toggle("active", b === button));
-      renderDashboard();
-    });
+document.querySelectorAll("#modeTabs button").forEach(button => {
+  button.addEventListener("click", () => {
+    activeMode = button.dataset.mode;
+    renderDashboard();
   });
-}
-
-function updateModeTabLabels() {
-  const labels = { signal: "SIGNAL", scan: "SCAN", all: "ALL" };
-  document.querySelectorAll("#modeTabs button").forEach(button => {
-    const mode = button.dataset.mode;
-    const count = mode === "all" ? allRecords.length : allRecords.filter(r => recordMode(r) === mode).length;
-    button.textContent = `${labels[mode]} (${count})`;
-  });
-}
+});
 
 (async () => {
-  const [records, agentsData] = await Promise.all([loadAnalyses(), loadAgents()]);
-  allRecords = records;
-  allAgentsData = agentsData;
-  updateModeTabLabels();
-  setupModeTabs();
+  allRecords = await loadAnalyses();
   renderDashboard();
 })();
 </script>
