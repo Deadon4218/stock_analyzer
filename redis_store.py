@@ -35,6 +35,11 @@ class RedisError(RuntimeError):
 
 
 def _check_env():
+    global _URL, _TOKEN
+    if not _URL:
+        _URL = os.environ.get("UPSTASH_REDIS_REST_URL", "")
+    if not _TOKEN:
+        _TOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
     if not _URL or not _TOKEN:
         raise RedisError(
             "Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN env vars"
