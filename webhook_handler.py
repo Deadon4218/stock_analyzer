@@ -159,41 +159,85 @@ def handle_command(chat_id: int, text: str):
         send_message(chat_id, report)
 
     elif cmd == "/buy":
-        if len(args) < 4:
+        if len(args) < 3:
             send_message(
                 chat_id,
-                "Usage: <code>/buy TICKER PRICE QUANTITY STOP_LOSS</code>\n"
+                "Usage: <code>/buy TICKER PRICE QUANTITY [STOP_LOSS]</code>\n"
                 "Example: <code>/buy AAPL 150 10 145</code>"
             )
             return
+            
         ticker = args[0].upper().strip()
         if not ticker.isalpha() or len(ticker) > 5:
             send_message(chat_id, f"⚠️ Invalid ticker: {ticker}")
             return
+            
         try:
             price = float(args[1])
             qty = float(args[2])
-            sl = float(args[3])
             
-            if price <= 0 or qty <= 0 or sl <= 0:
-                send_message(chat_id, "⚠️ Price, quantity, and stop-loss must be positive numbers.")
+            if price <= 0 or qty <= 0:
+                send_message(chat_id, "⚠️ Price and quantity must be positive numbers.")
                 return
                 
-            if sl >= price:
-                send_message(chat_id, f"⚠️ Stop-loss (${sl:.2f}) must be lower than entry price (${price:.2f}).")
-                return
+            if len(args) >= 4:
+                # Stop-loss is specified
+                sl = float(args[3])
+                if sl <= 0:
+                    send_message(chat_id, "⚠️ Stop-loss must be a positive number.")
+                    return
+                if sl >= price:
+                    send_message(chat_id, f"⚠️ Stop-loss (${sl:.2f}) must be lower than entry price (${price:.2f}).")
+                    return
+                    
+                from portfolio import buy_stock
+                pos = buy_stock(chat_id, ticker, price, qty, sl)
+                send_message(
+                    chat_id,
+                    f"✅ <b>Position Entered!</b>\n"
+                    f"📈 <b>{pos['ticker']}</b> (ID: {pos['id']})\n"
+                    f"  • Shares: {pos['quantity']} @ ${pos['entry_price']:.2f} (Cost: ${pos['entry_price']*pos['quantity']:.2f})\n"
+                    f"  • Stop-Loss: ${pos['current_stop_loss']:.2f}"
+                )
+            else:
+                # Stop-loss is NOT specified - calculate recommendations!
+                send_message(chat_id, f"🔍 Calculating stop-loss recommendations for <b>{ticker}</b>...")
+                from portfolio import recommend_stop_loss
+                recs = recommend_stop_loss(ticker, price)
                 
-            from portfolio import buy_stock
-            pos = buy_stock(chat_id, ticker, price, qty, sl)
-            send_message(
-                chat_id,
-                f"✅ <b>Position Entered!</b>\n"
-                f"📈 <b>{pos['ticker']}</b> (ID: {pos['id']})\n"
-                f"  • Shares: {pos['quantity']} @ ${pos['entry_price']:.2f} (Cost: ${pos['entry_price']*pos['quantity']:.2f})\n"
-                f"  • Stop-Loss: ${pos['current_stop_loss']:.2f}"
-            )
+                if not recs:
+                    send_message(
+                        chat_id,
+                        f"⚠️ Stop-loss is required to enter a position.\n"
+                        f"Could not calculate automated recommendations for {ticker}. Please specify it manually:\n"
+                        f"<code>/buy {ticker} {price} {qty} STOP_LOSS</code>"
+                    )
+                    return
+                    
+                atr_val = f"${recs['atr_14']:.2f}" if recs.get("atr_14") else "N/A"
+                
+                lines = [
+                    f"⚠️ <b>Stop-Loss (Exit Price) is required!</b>\n",
+                    f"Based on market data for <b>{ticker}</b>, here are recommended levels:",
+                    ""
+                ]
+                
+                if recs.get("sl_atr_1_5x"):
+                    lines.append(f"• <b>Option A (1.5x ATR):</b> ${recs['sl_atr_1_5x']:.2f} (14d ATR is {atr_val})")
+                    lines.append(f"  To use: <code>/buy {ticker} {price} {qty} {recs['sl_atr_1_5x']:.2f}</code>\n")
+                    
+                if recs.get("prev_day_low"):
+                    lines.append(f"• <b>Option B (Yesterday's Low):</b> ${recs['prev_day_low']:.2f}")
+                    lines.append(f"  To use: <code>/buy {ticker} {price} {qty} {recs['prev_day_low']:.2f}</code>")
+                    
+                if not recs.get("sl_atr_1_5x") and not recs.get("prev_day_low"):
+                    lines.append(f"Please specify a stop-loss price manually:")
+                    lines.append(f"<code>/buy {ticker} {price} {qty} STOP_LOSS</code>")
+                    
+                send_message(chat_id, "\n".join(lines))
+                
         except ValueError:
-            send_message(chat_id, "⚠️ Invalid numbers. Usage: <code>/buy TICKER PRICE QUANTITY STOP_LOSS</code>")
+            send_message(chat_id, "⚠️ Invalid numbers. Usage: <code>/buy TICKER PRICE QUANTITY [STOP_LOSS]</code>")
 
     elif cmd == "/update":
         if len(args) < 2:

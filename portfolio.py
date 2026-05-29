@@ -188,3 +188,38 @@ def update_all_portfolios():
                 send_message(chat_id, alert)
         except Exception as e:
             print(f"⚠️ Error updating portfolio for chat_id {chat_id}: {e}")
+
+
+def recommend_stop_loss(ticker: str, entry_price: float) -> dict | None:
+    """
+    Calculate two stop-loss recommendations for a ticker and entry price.
+    Option A: Entry - 1.5 * ATR(14) (day and a half volatility)
+    Option B: Low of the previous trading day
+    """
+    try:
+        from stock_data import fetch_stock_data
+        data = fetch_stock_data(ticker)
+        if data.error or data.current_price <= 0:
+            return None
+            
+        # Option A: 1.5 * ATR(14)
+        atr = data.atr_14
+        sl_atr = None
+        if atr is not None and atr > 0:
+            sl_atr = round(entry_price - 1.5 * atr, 2)
+            
+        # Option B: Previous Day's Low
+        sl_prev_low = None
+        if data.prev_day_low is not None and data.prev_day_low > 0:
+            sl_prev_low = round(data.prev_day_low, 2)
+            
+        return {
+            "ticker": ticker.upper(),
+            "entry_price": entry_price,
+            "atr_14": atr,
+            "sl_atr_1_5x": sl_atr,
+            "prev_day_low": sl_prev_low,
+        }
+    except Exception as e:
+        print(f"⚠️ Error calculating recommendations for {ticker}: {e}")
+        return None

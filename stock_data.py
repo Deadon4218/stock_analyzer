@@ -20,6 +20,7 @@ class StockData:
     above_200ma: bool
     above_50ma: bool
     market_cap: Optional[float]
+    prev_day_low: Optional[float] = None
     sector: str = ""
     error: str = ""
 
@@ -77,7 +78,7 @@ def fetch_stock_data(ticker: str) -> StockData:
         price_5d_ago=0, price_20d_ago=0, volume_today=0,
         volume_avg_10d=0, high_52w=0, low_52w=0,
         rsi_14=None, atr_14=None, above_200ma=False,
-        above_50ma=False, market_cap=None,
+        above_50ma=False, market_cap=None, prev_day_low=None,
     )
 
     try:
@@ -95,6 +96,7 @@ def fetch_stock_data(ticker: str) -> StockData:
         price_1d = float(closes.iloc[-2]) if len(closes) >= 2 else current
         price_5d = float(closes.iloc[-5]) if len(closes) >= 5 else current
         price_20d = float(closes.iloc[-20]) if len(closes) >= 20 else current
+        prev_low = float(hist["Low"].iloc[-2]) if len(hist) >= 2 else float(hist["Low"].iloc[-1])
 
         ma50 = float(closes.tail(50).mean())
         ma200 = float(closes.tail(200).mean()) if len(closes) >= 200 else float(closes.mean())
@@ -117,6 +119,7 @@ def fetch_stock_data(ticker: str) -> StockData:
             above_200ma=current > ma200,
             above_50ma=current > ma50,
             market_cap=info.get("marketCap"),
+            prev_day_low=prev_low,
             sector=info.get("sector", ""),
         )
 
