@@ -159,10 +159,10 @@ def handle_command(chat_id: int, text: str):
         send_message(chat_id, report)
 
     elif cmd == "/buy":
-        if len(args) < 3:
+        if len(args) < 2:
             send_message(
                 chat_id,
-                "Usage: <code>/buy TICKER PRICE QUANTITY [STOP_LOSS]</code>\n"
+                "Usage: <code>/buy TICKER PRICE [QUANTITY] [STOP_LOSS]</code>\n"
                 "Example: <code>/buy AAPL 150 10 145</code>"
             )
             return
@@ -174,10 +174,13 @@ def handle_command(chat_id: int, text: str):
             
         try:
             price = float(args[1])
-            qty = float(args[2])
-            
-            if price <= 0 or qty <= 0:
-                send_message(chat_id, "⚠️ Price and quantity must be positive numbers.")
+            if price <= 0:
+                send_message(chat_id, "⚠️ Price must be a positive number.")
+                return
+                
+            qty = float(args[2]) if len(args) >= 3 else 1.0
+            if qty <= 0:
+                send_message(chat_id, "⚠️ Quantity must be a positive number.")
                 return
                 
             if len(args) >= 4:
@@ -215,6 +218,7 @@ def handle_command(chat_id: int, text: str):
                     return
                     
                 atr_val = f"${recs['atr_14']:.2f}" if recs.get("atr_14") else "N/A"
+                qty_str = f"{int(qty)}" if qty.is_integer() else f"{qty}"
                 
                 lines = [
                     f"⚠️ <b>Stop-Loss (Exit Price) is required!</b>\n",
@@ -224,20 +228,20 @@ def handle_command(chat_id: int, text: str):
                 
                 if recs.get("sl_atr_1_5x"):
                     lines.append(f"• <b>Option A (1.5x ATR):</b> ${recs['sl_atr_1_5x']:.2f} (14d ATR is {atr_val})")
-                    lines.append(f"  To use: <code>/buy {ticker} {price} {qty} {recs['sl_atr_1_5x']:.2f}</code>\n")
+                    lines.append(f"  To use: <code>/buy {ticker} {price} {qty_str} {recs['sl_atr_1_5x']:.2f}</code>\n")
                     
                 if recs.get("prev_day_low"):
                     lines.append(f"• <b>Option B (Yesterday's Low):</b> ${recs['prev_day_low']:.2f}")
-                    lines.append(f"  To use: <code>/buy {ticker} {price} {qty} {recs['prev_day_low']:.2f}</code>")
+                    lines.append(f"  To use: <code>/buy {ticker} {price} {qty_str} {recs['prev_day_low']:.2f}</code>")
                     
                 if not recs.get("sl_atr_1_5x") and not recs.get("prev_day_low"):
                     lines.append(f"Please specify a stop-loss price manually:")
-                    lines.append(f"<code>/buy {ticker} {price} {qty} STOP_LOSS</code>")
+                    lines.append(f"<code>/buy {ticker} {price} {qty_str} STOP_LOSS</code>")
                     
                 send_message(chat_id, "\n".join(lines))
                 
         except ValueError:
-            send_message(chat_id, "⚠️ Invalid numbers. Usage: <code>/buy TICKER PRICE QUANTITY [STOP_LOSS]</code>")
+            send_message(chat_id, "⚠️ Invalid numbers. Usage: <code>/buy TICKER PRICE [QUANTITY] [STOP_LOSS]</code>")
 
     elif cmd == "/update":
         if len(args) < 2:
