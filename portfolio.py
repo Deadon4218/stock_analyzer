@@ -1,6 +1,6 @@
 """
-Portfolio Manager & Trailing Stop-Loss Tracker.
-Manages user portfolios in Upstash Redis and trails stop-losses.
+Portfolio Manager & Manual Stop-Loss Tracker.
+Manages user portfolios in Upstash Redis and tracks stop-losses.
 """
 from datetime import datetime, timezone
 import yfinance as yf
@@ -48,18 +48,14 @@ def buy_stock(
     ticker: str,
     entry_price: float,
     quantity: float,
-    trailing_pct: float,
-    initial_sl: float = None,
+    stop_loss: float,
 ) -> dict:
-    """Add a new position to the open portfolio."""
+    """Add a new position to the open portfolio with a manual stop-loss."""
     portfolio = get_portfolio(chat_id)
     
     # Generate a unique sequential ID
     all_positions = portfolio["open"] + portfolio["closed"]
     next_id = max([p["id"] for p in all_positions]) + 1 if all_positions else 1
-    
-    if initial_sl is None:
-        initial_sl = entry_price * (1 - trailing_pct / 100.0)
     
     new_pos = {
         "id": next_id,
@@ -67,15 +63,26 @@ def buy_stock(
         "entry_price": round(entry_price, 2),
         "quantity": quantity,
         "entry_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "trailing_pct": round(trailing_pct, 2),
-        "highest_price_seen": round(entry_price, 2),
-        "current_stop_loss": round(initial_sl, 2),
+        "current_stop_loss": round(stop_loss, 2),
         "status": "open",
     }
     
     portfolio["open"].append(new_pos)
     save_portfolio(chat_id, portfolio)
     return new_pos
+
+
+def update_stop_loss(chat_id: int, position_id: int, new_sl: float) -> dict | None:
+    """Manually update the stop-loss (exit price) of an open position."""
+    portfolio = get_portfolio(chat_id)
+    
+    for pos in portfolio["open"]:
+        if pos["id"] == position_id:
+            pos["current_stop_loss"] = round(new_sl, 2)
+            save_portfolio(chat_id, portfolio)
+            return pos
+            
+    return None
 
 
 def sell_stock(chat_id: int, position_id: int, exit_price: float = None, reason: str = "manual") -> dict | None:
@@ -114,7 +121,7 @@ def clear_portfolio(chat_id: int):
 
 def update_portfolio_prices(chat_id: int) -> list[str]:
     """
-    Update prices for open positions, trail stop-loss, check for hits.
+    Update prices for open positions, check if stop-loss is hit.
     Returns list of alert messages to send to the user.
     """
     portfolio = get_portfolio(chat_id)
@@ -132,22 +139,8 @@ def update_portfolio_prices(chat_id: int) -> list[str]:
             continue
             
         current_price = round(current_price, 2)
-        old_sl = pos["current_stop_loss"]
         
-        # 1. Update highest price seen & trail stop-loss
-        if current_price > pos["highest_price_seen"]:
-            pos["highest_price_seen"] = current_price
-            # Calculate new stop loss based on trailing percentage
-            new_sl = round(pos["highest_price_seen"] * (1 - pos["trailing_pct"] / 100.0), 2)
-            if new_sl > pos["current_stop_loss"]:
-                pos["current_stop_loss"] = new_sl
-                alerts.append(
-                    f"📈 <b>{ticker}</b> reached a new high of ${current_price:.2f}! "
-                    f"Trailing Stop-Loss moved up from ${old_sl:.2f} to ${new_sl:.2f}."
-                )
-                updated_any = True
-                
-        # 2. Check if current price hit stop-loss
+        # Check if current price hit stop-loss
         if current_price <= pos["current_stop_loss"]:
             portfolio["open"].remove(pos)
             

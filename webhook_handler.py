@@ -29,7 +29,8 @@ WELCOME_TEXT = (
     "/list — Show your watchlist\n"
     "/analyze AAPL — Instant analysis (~30s)\n\n"
     "<b>Trading Notebook (Portfolio):</b>\n"
-    "/buy AAPL 150 10 5 — Buy 10 AAPL @ $150, 5% trailing SL\n"
+    "/buy AAPL 150 10 145 — Buy 10 AAPL @ $150, stop-loss at $145\n"
+    "/update ID NEW_SL — Manually update stop-loss price of an open position\n"
     "/sell ID [PRICE] — Sell position by its ID (fetches market price if blank)\n"
     "/portfolio (or /port) — Show your open positions & P/L\n"
     "/port_history — Show your closed trades history\n"
@@ -161,8 +162,8 @@ def handle_command(chat_id: int, text: str):
         if len(args) < 4:
             send_message(
                 chat_id,
-                "Usage: <code>/buy TICKER PRICE QUANTITY TRAILING_PCT [STOP_LOSS]</code>\n"
-                "Example: <code>/buy AAPL 150 10 5</code>"
+                "Usage: <code>/buy TICKER PRICE QUANTITY STOP_LOSS</code>\n"
+                "Example: <code>/buy AAPL 150 10 145</code>"
             )
             return
         ticker = args[0].upper().strip()
@@ -172,28 +173,59 @@ def handle_command(chat_id: int, text: str):
         try:
             price = float(args[1])
             qty = float(args[2])
-            trail = float(args[3])
-            sl = float(args[4]) if len(args) > 4 else None
+            sl = float(args[3])
             
-            if price <= 0 or qty <= 0 or trail <= 0 or (sl is not None and sl <= 0):
-                send_message(chat_id, "⚠️ Price, quantity, trailing percentage, and stop loss must be positive numbers.")
+            if price <= 0 or qty <= 0 or sl <= 0:
+                send_message(chat_id, "⚠️ Price, quantity, and stop-loss must be positive numbers.")
                 return
                 
-            if sl is not None and sl >= price:
+            if sl >= price:
                 send_message(chat_id, f"⚠️ Stop-loss (${sl:.2f}) must be lower than entry price (${price:.2f}).")
                 return
                 
             from portfolio import buy_stock
-            pos = buy_stock(chat_id, ticker, price, qty, trail, sl)
+            pos = buy_stock(chat_id, ticker, price, qty, sl)
             send_message(
                 chat_id,
                 f"✅ <b>Position Entered!</b>\n"
                 f"📈 <b>{pos['ticker']}</b> (ID: {pos['id']})\n"
                 f"  • Shares: {pos['quantity']} @ ${pos['entry_price']:.2f} (Cost: ${pos['entry_price']*pos['quantity']:.2f})\n"
-                f"  • Trailing SL: ${pos['current_stop_loss']:.2f} ({pos['trailing_pct']}%)"
+                f"  • Stop-Loss: ${pos['current_stop_loss']:.2f}"
             )
         except ValueError:
-            send_message(chat_id, "⚠️ Invalid numbers. Usage: <code>/buy TICKER PRICE QUANTITY TRAILING_PCT [SL]</code>")
+            send_message(chat_id, "⚠️ Invalid numbers. Usage: <code>/buy TICKER PRICE QUANTITY STOP_LOSS</code>")
+
+    elif cmd == "/update":
+        if len(args) < 2:
+            send_message(
+                chat_id,
+                "Usage: <code>/update ID NEW_SL</code>\n"
+                "Example: <code>/update 1 148</code>"
+            )
+            return
+        try:
+            pos_id = int(args[0])
+            new_sl = float(args[1])
+            
+            if new_sl <= 0:
+                send_message(chat_id, "⚠️ Stop-loss must be positive.")
+                return
+                
+            from portfolio import update_stop_loss
+            pos = update_stop_loss(chat_id, pos_id, new_sl)
+            if not pos:
+                send_message(chat_id, f"⚠️ Open position with ID {pos_id} not found.")
+                return
+                
+            send_message(
+                chat_id,
+                f"✅ <b>Stop-Loss Updated!</b>\n"
+                f"📈 <b>{pos['ticker']}</b> (ID: {pos['id']})\n"
+                f"  • Entry Price: ${pos['entry_price']:.2f}\n"
+                f"  • New Stop-Loss: ${pos['current_stop_loss']:.2f}"
+            )
+        except ValueError:
+            send_message(chat_id, "⚠️ Invalid arguments. Usage: <code>/update ID NEW_SL</code>")
 
     elif cmd == "/sell":
         if not args:
@@ -224,7 +256,7 @@ def handle_command(chat_id: int, text: str):
             send_message(
                 chat_id,
                 f"🗑 <b>Position Closed!</b>\n"
-                f"📉 <b>{pos['ticker']}</b> (ID: {pos['id']})\n"
+                f"📈 <b>{pos['ticker']}</b> (ID: {pos['id']})\n"
                 f"  • Shares: {pos['quantity']} @ ${pos['entry_price']:.2f}\n"
                 f"  • Closed at: ${pos['exit_price']:.2f}\n"
                 f"  • {pl_color} P/L: {pl_sign}${pl_usd:.2f} ({pl_sign}{pl_pct:.2f}%)"
@@ -239,7 +271,7 @@ def handle_command(chat_id: int, text: str):
             send_message(
                 chat_id,
                 "💼 Your portfolio has no open positions.\n"
-                "Use <code>/buy AAPL 150 10 5</code> to add a position."
+                "Use <code>/buy AAPL 150 10 145</code> to add a position."
             )
             return
             
@@ -270,8 +302,7 @@ def handle_command(chat_id: int, text: str):
                 f"🟢 <b>{ticker}</b> (ID: {pos['id']})\n"
                 f"  • Shares: {pos['quantity']} @ ${pos['entry_price']:.2f} (Cost: ${cost:.2f})\n"
                 f"  • Current: ${current_price:.2f} (Value: ${value:.2f})\n"
-                f"  • Highest Seen: ${pos['highest_price_seen']:.2f}\n"
-                f"  • Trailing SL: ${pos['current_stop_loss']:.2f} ({pos['trailing_pct']:.1f}%)\n"
+                f"  • Stop-Loss: ${pos['current_stop_loss']:.2f}\n"
                 f"  • P/L: {pl_color} <b>{pl_sign}${pl_usd:.2f} ({pl_sign}{pl_pct:.2f}%)</b>\n"
             )
             
